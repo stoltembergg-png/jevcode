@@ -8,6 +8,8 @@
     "core:event:allow-listen",
     "core:event:allow-unlisten",
     "core:window:allow-start-dragging",
+    "updater:default",
+    "process:default",
     "core:window:allow-set-theme",
     "core:webview:allow-set-webview-zoom",
     "core:window:allow-is-focused",

@@ -470,6 +470,46 @@ into the binary at compile time.** After changing anything under `src/renderer`,
 `cargo build` again (or use `tauri dev`); rebuilding only the renderer changes nothing
 the running app can see.
 
+## P4 prerequisites and updater E2E
+
+### Updater E2E (unsigned build, local feed) — PASS
+
+The shell ships `tauri-plugin-updater` (+ `tauri-plugin-process`) with the real minisign
+public key in `plugins.updater.pubkey`. Verified end to end against a local feed
+(`http://127.0.0.1:8787/latest.json`, a dev-only endpoint): the app checks the feed,
+compares versions, downloads the artifact and verifies its minisign signature against
+the embedded key — `updater self-test {"status":"ready","version":"0.0.2"}`. The state
+machine mirrors the Electron controller (`idle/checking/downloading/ready/up-to-date/
+installing/error`), so the existing UI works unchanged. Still required for P4: a real
+`tauri build` (NSIS) plus the actual install/restart cycle, `bundle.createUpdaterArtifacts`
+with signed artifacts in CI, and HTTPS endpoints per channel.
+
+Gotchas found: PowerShell 5.1 `Set-Content -Encoding UTF8` writes a BOM that breaks feed
+decoding; `tauri signer sign` wants the base64 key *contents* (only the bundler accepts a
+path); the private key's password cannot be supplied non-interactively, so the signing step
+must run where the password is available.
+
+### Credentials (2026 state)
+
+- **Updater keypair**: generated locally (`~/.tauri/opencode.key[.pub]`). Back it up
+  off-line; rotating it silently strands existing installs unless done as a two-release
+  transition (the old key signs a build that already embeds the new pubkey).
+- **Windows**: **Azure Artifact Signing** (renamed from Trusted Signing, GA Jan 2026,
+  `azure/artifact-signing-action@v2`) costs ~US$120/yr and needs a paid Azure
+  subscription, but Individual identity validation is only available in the US/Canada and
+  Organization only in the listed countries — **Brazil is not covered**. The practical
+  route is therefore a classic OV/EV certificate with cloud signing (post-2023 CA/B rules
+  require the key in an HSM; SSL.com eSigner OV ≈US$309/yr, DigiCert KeyLocker
+  ≈US$996/yr), wired through `bundle.windows.signCommand`.
+- **macOS**: Apple Developer Program US$99/yr; Individual enrollment ≈24h (no D-U-N-S),
+  Organization needs a D-U-N-S number (1–2+ weeks). Use a **Developer ID Application**
+  certificate (an "Apple Development" certificate is rejected by notarization) plus an App
+  Store Connect API key (`.p8`, single download) for notarization.
+- Secrets live in the repository/environment (`gh secret set`); OIDC federation is
+  preferred for Azure. Public-repo note: workflows triggered by fork PRs never receive
+  secrets, and `pull_request_target` must never be combined with checking out untrusted
+  code.
+
 ## Cross-cutting tasks
 
 - **Bridge contract test**: assert that every method on the `window.api` shim has a

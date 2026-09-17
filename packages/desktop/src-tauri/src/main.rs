@@ -1265,6 +1265,8 @@ fn main() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_deep_link::init())
         .manage(ShellState::default())
         .manage(PickedFiles::default())
@@ -1329,6 +1331,13 @@ fn main() {
     await invoke("log_stub", { message: "shell self-test " + JSON.stringify({ appExists, appPath, revealed }) });
   } catch (error) {
     await invoke("log_stub", { message: "shell self-test failed " + String(error) });
+  }
+  // Temporary self-test for the updater slice.
+  try {
+    const state = await window.api.updater.check();
+    await invoke("log_stub", { message: "updater self-test " + JSON.stringify(state) });
+  } catch (error) {
+    await invoke("log_stub", { message: "updater self-test failed " + String(error) });
   }
   // Temporary self-test for the native i18n/menu commands.
   try {

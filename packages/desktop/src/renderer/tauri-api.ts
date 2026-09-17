@@ -11,6 +11,9 @@
 import { invoke } from "@tauri-apps/api/core"
 import { listen } from "@tauri-apps/api/event"
 import { getCurrentWindow } from "@tauri-apps/api/window"
+import { relaunch as relaunchApp } from "@tauri-apps/plugin-process"
+import { check as checkForUpdate } from "@tauri-apps/plugin-updater"
+import type { UpdaterState } from "@opencode-ai/app/updater"
 
 const SETTINGS_STORE = "opencode.settings"
 const DEFAULT_SERVER_URL_KEY = "defaultServerUrl"
@@ -44,11 +47,57 @@ const tauriApi = {
     invoke<{ url: string; username: string | null; password: string | null }>("await_initialization"),
   wslServers: undefined,
 
-  updater: {
-    subscribe: async () => () => {},
-    check: async () => ({ status: "disabled" }),
-    install: async () => {},
-  },
+  // Mirrors the Electron updater controller: check/download through the Tauri
+  // updater plugin (minisign verification included) and the same state machine the
+  // UI already consumes (idle/checking/downloading/ready/up-to-date/installing/error).
+  updater: (() => {
+    let state: UpdaterState = { status: "idle" }
+    let pending: Promise<UpdaterState> | undefined
+    const listeners = new Set<(state: UpdaterState) => void>()
+    const transition = (next: UpdaterState) => {
+      state = next
+      listeners.forEach((listener) => listener(state))
+      return state
+    }
+    const check = () => {
+      if (state.status === "ready") return Promise.resolve(state)
+      if (pending) return pending
+      pending = (async () => {
+        transition({ status: "checking" })
+        const update = await checkForUpdate()
+        if (!update) return transition({ status: "up-to-date" })
+        transition({ status: "downloading", version: update.version })
+        await update.download()
+        return transition({ status: "ready", version: update.version })
+      })()
+        .catch((error) => transition({ status: "error", message: error instanceof Error ? error.message : String(error) }))
+        .finally(() => {
+          pending = undefined
+        })
+      return pending
+    }
+    return {
+      subscribe: async (callback: (state: UpdaterState) => void) => {
+        listeners.add(callback)
+        callback(state)
+        return () => listeners.delete(callback)
+      },
+      check,
+      install: async () => {
+        if (state.status !== "ready") throw new Error("Update is not ready to install")
+        const version = state.version
+        transition({ status: "installing", version })
+        await invoke("kill_sidecar").catch(() => undefined)
+        const update = await checkForUpdate()
+        if (!update) {
+          transition({ status: "ready", version })
+          return
+        }
+        await update.install()
+        await relaunchApp()
+      },
+    }
+  })(),
 
   consumeInitialDeepLinks: () => invoke<string[]>("consume_initial_deep_links"),
   onDeepLink: (callback: (urls: string[]) => void) =>
@@ -115,7 +164,9 @@ const tauriApi = {
   onWindowFullscreenChanged: (_callback: (fullscreen: boolean) => void) => () => {},
   setWindowFocus: () => getCurrentWindow().setFocus(),
   showWindow: () => getCurrentWindow().show(),
-  relaunch: () => warn("relaunch"),
+  relaunch: () => {
+    void relaunchApp().catch((error) => console.warn("[tauri-api] relaunch failed", error))
+  },
 
   getZoomFactor: async () => 1,
   setZoomFactor: (factor: number) => invoke<void>("set_zoom", { factor }),
