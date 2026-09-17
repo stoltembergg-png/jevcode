@@ -281,6 +281,32 @@ and run locally):
 - Not covered by automation, needs a human check: actual window dragging through
   `data-tauri-drag-region`, and whether zoom scales CSS layout (not only DPR).
 
+### Spike 3 — macOS probe on CI
+
+`artifacts/tauri-p0-probe` plus `.github/workflows/tauri-p0-macos.yml` run the same
+probe on a macOS runner (triggered by pushes to the spike branch): it builds the
+macOS sidecar (`bun run build --single --skip-embed-web-ui`), stages it as an
+`externalBin`, builds the probe with `cargo build`, runs it and uploads
+`tauri-p0-report.json`. This validates compilation and runtime on WKWebView
+(window creation, `set_zoom`, sidecar spawn + `/global/health`). Visual and drag
+confirmation on macOS still needs a human with a Mac.
+
+Operational note found during the Windows probe:
+
+- Running the probe from an **elevated** shell left an orphaned sidecar
+  (`opencode-cli.exe`) holding a handle on `target/debug/opencode-cli.exe`.
+  `tauri-build` deletes that copy before re-copying and then fails with
+  `PermissionDenied`, so the next build breaks. Run probes non-elevated and keep
+  the sidecar hardening (PID registry, stdin-EOF shutdown, job objects) in the
+  real shell.
+
+Follow-up implemented during P0 (see `packages/opencode`):
+
+- `script/smoke-server.ts` boots the compiled binary, waits for
+  `/global/health` and drives a PTY round trip; it is wired into
+  `script/build.ts` together with a Bun-version mismatch warning. Verified
+  locally against the compiled Windows binary (PASS).
+
 ## Cross-cutting tasks
 
 - **Bridge contract test**: assert that every method on the `window.api` shim has a
