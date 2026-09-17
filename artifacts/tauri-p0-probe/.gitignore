@@ -1,5 +1,0 @@
-target/
-gen/
-binaries/
-report*.json
-*.log

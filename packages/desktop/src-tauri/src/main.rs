@@ -255,7 +255,9 @@ fn store_write(app: &AppHandle, name: &str, map: &serde_json::Map<String, Value>
 
 #[tauri::command]
 fn store_get(app: AppHandle, name: String, key: String) -> Result<Option<String>, String> {
-    println!("[store] get {name} {key}");
+    if cfg!(debug_assertions) {
+        println!("[store] get {name} {key}");
+    }
     let map = store_read(&app, &name)?;
     Ok(map.get(&key).map(|value| match value {
         Value::String(text) => text.clone(),
@@ -265,7 +267,9 @@ fn store_get(app: AppHandle, name: String, key: String) -> Result<Option<String>
 
 #[tauri::command]
 fn store_set(app: AppHandle, name: String, key: String, value: String) -> Result<(), String> {
-    println!("[store] set {name} {key}");
+    if cfg!(debug_assertions) {
+        println!("[store] set {name} {key}");
+    }
     let mut map = store_read(&app, &name)?;
     map.insert(key, Value::String(value));
     store_write(&app, &name, &map)
@@ -293,11 +297,13 @@ fn store_length(app: AppHandle, name: String) -> Result<usize, String> {
     Ok(store_read(&app, &name)?.len())
 }
 
-/// Lets the stub page report its checks to stdout so the shell can be verified
-/// without looking at the screen.
+/// Development helper: lets the renderer report diagnostics to stdout. Silent in
+/// release builds.
 #[tauri::command]
 fn log_stub(message: String) {
-    println!("[stub] {message}");
+    if cfg!(debug_assertions) {
+        println!("[stub] {message}");
+    }
 }
 
 #[tauri::command]
@@ -1276,9 +1282,13 @@ fn main() {
                 _ => {}
             }
         })
-        // Diagnostics for the bootstrap phase: log page loads and, once the page is
-        // finished, evaluate a probe script that reports what the webview can see.
+        // Development diagnostics: log page loads and run a probe script inside the
+        // page so the shell can be verified without looking at the screen. Compiled
+        // out of release builds.
         .on_page_load(|webview, payload| {
+            if !cfg!(debug_assertions) {
+                return;
+            }
             println!("[page] {:?} {}", payload.event(), payload.url());
             if let tauri::webview::PageLoadEvent::Finished = payload.event() {
                 let _ = webview.eval(

@@ -319,6 +319,10 @@ Second CI gotcha: Tauri validates the icon list at compile time (`generate_conte
 so a Windows-only icon set fails on macOS. The probe now ships `icons/icon.png`
 alongside `icons/icon.ico` and names both in `bundle.icon`.
 
+The probe app and its workflow were removed once P0 closed (recover them from git
+history if a minimal reproduction is ever needed). `.github/workflows/tauri-shell-macos.yml`
+now runs the real shell on macOS and asserts the menu, sidecar and i18n behaviour.
+
 Operational note found during the Windows probe:
 
 - Running the probe from an **elevated** shell left an orphaned sidecar
