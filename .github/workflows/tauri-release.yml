@@ -69,7 +69,11 @@ jobs:
         run: |
           set -euo pipefail
           if [ "$RUNNER_OS" = "Windows" ]; then
-            bun install --linker hoisted --no-cache
+            # Bun's patched-dependency cache rename fails with ENOTEMPTY on Windows
+            # (oven-sh/bun#28147). A cache-free install resolved fewer packages than a
+            # normal one, so clear the cache first and then install normally.
+            bun pm cache rm || true
+            bun install --linker hoisted
           else
             bun install
           fi
@@ -175,8 +179,13 @@ jobs:
           APPLE_API_KEY_CONTENTS: ${{ secrets.APPLE_API_KEY_CONTENTS }}
         run: |
           set -euo pipefail
-          if [ -n "${APPLE_API_KEY_CONTENTS:-}" ]; then
-            printf '%s' "$APPLE_API_KEY_CONTENTS" > "$APPLE_API_KEY_PATH"
+          if [ "${HAS_APPLE:-false}" = "true" ]; then
+            printf '%s' "${APPLE_API_KEY_CONTENTS:-}" > "$APPLE_API_KEY_PATH"
+          else
+            # Without credentials Tauri still tries to notarize (the env vars are set)
+            # and fails on the missing .p8; drop them and sign ad-hoc instead.
+            unset APPLE_API_ISSUER APPLE_API_KEY APPLE_API_KEY_PATH APPLE_API_KEY_CONTENTS APPLE_SIGNING_IDENTITY
+            export APPLE_SIGNING_IDENTITY="-"
           fi
           bun run tauri build --config src-tauri/tauri.ci.conf.json --bundles "${{ matrix.bundles }}"
 
