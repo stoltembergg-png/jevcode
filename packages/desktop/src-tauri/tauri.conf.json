@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "identifier": "ai.opencode.desktop.v2.dev",
   "build": {
-    "frontendDist": "web-stub"
+    "frontendDist": "web-dist"
   },
   "app": {
     "withGlobalTauri": true,

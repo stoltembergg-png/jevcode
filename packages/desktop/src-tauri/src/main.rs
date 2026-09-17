@@ -203,6 +203,7 @@ fn store_write(app: &AppHandle, name: &str, map: &serde_json::Map<String, Value>
 
 #[tauri::command]
 fn store_get(app: AppHandle, name: String, key: String) -> Result<Option<String>, String> {
+    println!("[store] get {name} {key}");
     let map = store_read(&app, &name)?;
     Ok(map.get(&key).map(|value| match value {
         Value::String(text) => text.clone(),
@@ -212,6 +213,7 @@ fn store_get(app: AppHandle, name: String, key: String) -> Result<Option<String>
 
 #[tauri::command]
 fn store_set(app: AppHandle, name: String, key: String, value: String) -> Result<(), String> {
+    println!("[store] set {name} {key}");
     let mut map = store_read(&app, &name)?;
     map.insert(key, Value::String(value));
     store_write(&app, &name, &map)
@@ -244,6 +246,20 @@ fn store_length(app: AppHandle, name: String) -> Result<usize, String> {
 #[tauri::command]
 fn log_stub(message: String) {
     println!("[stub] {message}");
+}
+
+#[tauri::command]
+fn set_zoom(window: tauri::WebviewWindow, factor: f64) -> Result<(), String> {
+    window.set_zoom(factor).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn kill_sidecar(state: State<'_, ShellState>) {
+    if let Some(child) = state.child.lock().unwrap().take() {
+        let _ = child.kill();
+        println!("[shell] sidecar killed on request");
+    }
+    *state.ready.lock().unwrap() = None;
 }
 
 fn main() {
@@ -299,7 +315,9 @@ fn main() {
             store_clear,
             store_keys,
             store_length,
-            log_stub
+            log_stub,
+            set_zoom,
+            kill_sidecar
         ])
         .setup(|app| {
             let handle = app.handle().clone();

@@ -39,3 +39,16 @@ mkdirSync(destDir, { recursive: true })
 const dest = path.join(destDir, `opencode-cli-${host}${exe}`)
 copyFileSync(source, dest)
 console.log(`sidecar staged: ${dest}`)
+
+// `frontendDist` points at src-tauri/web-dist, which must exist before Tauri
+// compiles. Build the renderer on demand so a plain `cargo build` never fails on
+// a missing path.
+if (!existsSync(path.join(desktop, "src-tauri/web-dist/index.html"))) {
+  console.log("renderer assets missing: building with vite.tauri.config.ts")
+  const built = await $`bun x vite build --config vite.tauri.config.ts`.cwd(desktop).nothrow()
+  if (built.exitCode !== 0) {
+    console.error(built.stderr.toString())
+    process.exit(1)
+  }
+  console.log("renderer assets built")
+}

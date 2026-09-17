@@ -1,5 +1,9 @@
 // @refresh reload
 
+// Installs the Tauri `window.api` shim when the Electron preload is absent.
+// Must run before any module-level `window.api` access below.
+import "./tauri-api"
+
 import {
   ACCEPTED_FILE_EXTENSIONS,
   AppBaseProviders,
