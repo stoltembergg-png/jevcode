@@ -1,9 +1,27 @@
-/* Matches the historic Tauri shell: the overlay titlebar controls (Windows) keep the
-   same 40px height as the app titlebar. */
+/* Windows overlay caption controls (tauri-plugin-decorum).
+   Decorum creates the buttons but leaves the container to the app, so it must be
+   shown, positioned and sized here (the marker keeps Tailwind's w-0/h-0/hidden
+   classes, which must be neutralised). Widths match the 138px the titlebar
+   reserves (3 x 46px, Windows 11 metrics) and the 40px app titlebar height. */
+div[data-tauri-decorum-tb] {
+  display: flex !important;
+  position: fixed;
+  top: 0;
+  right: 0;
+  z-index: 100;
+  width: auto !important;
+  height: auto !important;
+  align-items: stretch;
+  justify-content: flex-end;
+  background: transparent;
+}
+
 button.decorum-tb-btn,
 button#decorum-tb-minimize,
 button#decorum-tb-maximize,
-button#decorum-tb-close,
-div[data-tauri-decorum-tb] {
+button#decorum-tb-close {
+  flex: 0 0 auto;
+  width: 46px !important;
   height: calc(var(--spacing) * 10) !important;
+  color: inherit;
 }
