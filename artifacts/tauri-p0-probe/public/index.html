@@ -80,6 +80,22 @@
           status("health failed: " + error);
         }
       });
+
+      // Drag instrumentation: counting presses on the bar and recording real window
+      // moves separates "the user tried" from "the window actually moved".
+      let dragAttempts = 0;
+      document.getElementById("dragbar").addEventListener("mousedown", () => {
+        dragAttempts += 1;
+        invoke("record_drag_attempt", { count: dragAttempts }).catch(() => {});
+      });
+      try {
+        const currentWindow = window.__TAURI__.window.getCurrentWindow();
+        currentWindow.onMoved(({ payload }) => {
+          invoke("record_move", { x: payload.x, y: payload.y }).catch(() => {});
+        });
+      } catch (error) {
+        console.error("move listener failed", error);
+      }
     </script>
   </body>
 </html>

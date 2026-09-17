@@ -68,6 +68,8 @@ struct Probe {
     health_status: Mutex<Option<u16>>,
     health_body: Mutex<Option<String>>,
     health_error: Mutex<Option<String>>,
+    drag_attempts: Mutex<Option<u32>>,
+    window_moves: Mutex<Vec<(i32, i32)>>,
 }
 
 fn unix_ms() -> u128 {
@@ -124,6 +126,19 @@ fn get_zoom(state: State<'_, Probe>) -> f64 {
 #[tauri::command]
 fn zoom_readback(state: State<'_, Probe>, dpr: f64) {
     *state.zoom_dpr.lock().unwrap() = Some(dpr);
+}
+
+#[tauri::command]
+fn record_drag_attempt(state: State<'_, Probe>, count: u32) {
+    *state.drag_attempts.lock().unwrap() = Some(count);
+}
+
+#[tauri::command]
+fn record_move(state: State<'_, Probe>, x: i32, y: i32) {
+    let mut moves = state.window_moves.lock().unwrap();
+    if moves.len() < 50 {
+        moves.push((x, y));
+    }
 }
 
 fn try_spawn_plugin(app: &AppHandle) -> Result<u32, String> {
@@ -302,6 +317,10 @@ fn build_report(
             "readback_device_pixel_ratio": *probe.zoom_dpr.lock().unwrap(),
             "readback_note": "No Rust getter exists for zoom; read devicePixelRatio from JS via zoom_readback(). DPR scales with the webview zoom factor (verified on WebView2).",
         },
+        "drag": {
+            "attempts_on_drag_bar": *probe.drag_attempts.lock().unwrap(),
+            "window_moves": probe.window_moves.lock().unwrap().clone(),
+        },
         "sidecar": {
             "spawned_at_unix_ms": spawned_at_ms,
             "pids": *probe.sidecar_pids.lock().unwrap(),
@@ -324,6 +343,8 @@ fn main() {
             set_zoom,
             get_zoom,
             zoom_readback,
+            record_drag_attempt,
+            record_move,
             spawn_sidecar,
             health_check,
             probe_report

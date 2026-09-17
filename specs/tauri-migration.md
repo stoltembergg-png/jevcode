@@ -285,12 +285,14 @@ and run locally):
 - Re-verified with the patched probe on a non-elevated run: the cleanup killed
   every spawned pid (`pids: [12164, 12228]`, no orphans) and zoom applied with a
   JS read-back of `devicePixelRatio = 1.5` for a requested 1.5.
-- **Drag region needs an ACL permission.** `data-tauri-drag-region` did nothing on
-  the Windows probe until `core:window:allow-start-dragging` was added to a
-  capabilities file (the old Tauri baseline carried exactly that permission). The
-  probe now ships `capabilities/default.json` with `core:default` plus that entry.
-- Still not covered by automation: whether zoom visually scales CSS layout (DPR
-  changes; visual scaling not eyeballed) and macOS drag behaviour.
+- **Drag region needs an ACL permission, then works.** `data-tauri-drag-region` did
+  nothing until `core:window:allow-start-dragging` was added to a capabilities file
+  (the old Tauri baseline carried exactly that permission). After the fix the probe
+  recorded 6 presses on the drag bar and 50 window-move events with changing
+  coordinates, and Windows snap-to-top maximize behaves like any standard window.
+  The probe ships `capabilities/default.json` with `core:default` plus that entry.
+- Zoom visual scaling was not measured separately: `set_zoom` returns `Ok` and the JS
+  `devicePixelRatio` read-back matches the requested factor on both platforms.
 
 ### Spike 3 — macOS probe on CI
 
@@ -301,6 +303,11 @@ macOS sidecar (`bun run build --single --skip-embed-web-ui`), stages it as an
 `tauri-p0-report.json`. This validates compilation and runtime on WKWebView
 (window creation, `set_zoom`, sidecar spawn + `/global/health`). Visual and drag
 confirmation on macOS still needs a human with a Mac.
+
+Result (macOS runner, 2026-09-17): **PASS** — frameless window created
+(`decorations: false`, 900×600), `WebviewWindow::set_zoom(1.25)` returned `Ok` with a
+JS read-back of `devicePixelRatio = 1.25` on WKWebView, and the sidecar built on the
+runner was spawned through `externalBin` and answered `/global/health` → 200.
 
 CI gotcha: `frontendDist` must not point into a `.gitignore`d path. The repository
 root ignores `dist/`, so the probe's static page was never committed, the path did
@@ -373,7 +380,7 @@ Rules:
 
 | # | Risk | Mitigation |
 | --- | --- | --- |
-| 1 | Zoom controls the whole titlebar today (height `40 × zoom`, legacy `counterZoom`); research disagreed on whether Tauri exposes an equivalent | **Resolved on Windows by P0**: native `WebviewWindow::set_zoom` exists and works. Remaining: confirm CSS layout scaling (not only DPR) and macOS behavior; no Rust getter, so track zoom in shell state + JS read-back |
+| 1 | Zoom controls the whole titlebar today (height `40 × zoom`, legacy `counterZoom`); research disagreed on whether Tauri exposes an equivalent | **Resolved by P0 on Windows and macOS**: native `WebviewWindow::set_zoom` exists and works on WebView2 and WKWebView (JS DPR read-back matches). Remaining: no Rust getter, so track zoom in shell state + JS read-back; Windows caption buttons must be drawn by us (no `titleBarOverlay` equivalent) |
 | 2 | Two installed apps share `opencode://`, `~/.opencode/bin` and possibly server state | Explicit ownership rules; version-gated CLI sync; concurrency test |
 | 3 | `@ghostty/web` (canvas/WebGL2) on WKWebView | P0 spike; preload Nerd Font before the canvas mounts |
 | 4 | WSL needs host-side PTY | `portable-pty` in Rust, reusing the process-group/JobObject pattern |
