@@ -541,6 +541,31 @@ that copy and broke the next `cargo build`). macOS has no job-object equivalent,
 hard kill there can still orphan the server; a PID registry with a boot sweep (or
 stdin-EOF shutdown if the server supports it) stays open for P4.
 
+## P4 — packaging
+
+### First NSIS bundle — PASS
+
+- `bundle.active: true` with `targets: ["nsis"]`; `bun run tauri build` produces
+  `target/release/opencode-desktop.exe` (35 MB), the bundled sidecar
+  (`opencode-cli.exe`, 172 MB) and `OpenCode_0.0.0_x64-setup.exe` (63 MB). The packaged
+  app boots with its bundled sidecar — verified through processes and the window, because
+  a release build is a `windows_subsystem = "windows"` app and has no stdout diagnostics.
+- The `tauri` crate enables the `devtools` feature (Electron exposed "Toggle Developer
+  Tools" in production too, so this keeps parity).
+- **Release boot panic found and fixed**: the updater plugin refuses non-HTTPS endpoints
+  in release builds (`The configured updater endpoint must use a secure protocol like
+  https`) and the app panicked at startup. The base `tauri.conf.json` now points at the
+  GitHub releases feed (`https://github.com/stoltembergg-png/jevcode/releases/latest/download/latest.json`)
+  and the local feed moved to `tauri.dev.conf.json`
+  (`dangerousInsecureTransportProtocol: true`), used explicitly for the local updater E2E.
+- Caption-control polish: the decorum hover overlay was a black tint (invisible on dark
+  themes), replaced with a `color-mix(currentColor 12%)` overlay so minimize/maximize
+  give the same feedback as Windows 11; close keeps decorum's red hover.
+
+Still to do: `createUpdaterArtifacts` with the signing key, the release workflow with the
+documented secret names, the real install → update → restart cycle, `tauri-plugin-log` +
+`exportDebugLogs`, and macOS orphan hardening.
+
 ## Cross-cutting tasks
 
 - **Bridge contract test**: assert that every method on the `window.api` shim has a

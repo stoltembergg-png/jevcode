@@ -25,3 +25,10 @@ button#decorum-tb-close {
   height: calc(var(--spacing) * 10) !important;
   color: inherit;
 }
+
+/* Decorum ships a black hover overlay, which is invisible on dark themes. Use the
+   icon colour instead so minimised/maximised windows match Windows 11 feedback.
+   (The red close hover from decorum is `!important` and stays.) */
+button.decorum-tb-btn:hover {
+  background-color: color-mix(in srgb, currentColor 12%, transparent) !important;
+}
