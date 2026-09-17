@@ -70,8 +70,8 @@ const tauriApi = {
   getDisplayBackend: async () => null,
   setDisplayBackend: async () => {},
 
-  checkAppExists: async () => false,
-  resolveAppPath: async () => null,
+  checkAppExists: (appName: string) => invoke<boolean>("check_app_exists", { appName }),
+  resolveAppPath: (appName: string) => invoke<string | null>("resolve_app_path", { appName }),
 
   storeGet,
   storeSet,
@@ -89,17 +89,24 @@ const tauriApi = {
   getWindowID: () => invoke<string>("get_window_id"),
   onMenuCommand: (callback: (id: string) => void) => subscribe<string>("menu-command", callback),
 
-  openDirectoryPicker: async () => null,
-  openFilePicker: async () => null,
-  readPickedFile: async () => new ArrayBuffer(0),
-  releasePickedFiles: async () => {},
+  openDirectoryPicker: (opts?: { multiple?: boolean; title?: string; defaultPath?: string }) =>
+    invoke<string | string[] | null>("open_directory_picker", { opts }),
+  openFilePicker: (opts?: { multiple?: boolean; title?: string; defaultPath?: string; extensions?: string[] }) =>
+    invoke<{ token: string; files: { path: string; name: string; size: number }[] } | null>("open_file_picker", { opts }),
+  readPickedFile: (token: string, path: string) => invoke<ArrayBuffer>("read_picked_file", { token, path }),
+  releasePickedFiles: (token: string) => invoke<void>("release_picked_files", { token }),
   getPathForFile: () => "",
-  saveFilePicker: async () => null,
+  saveFilePicker: (opts?: { title?: string; defaultPath?: string }) =>
+    invoke<string | null>("save_file_picker", { opts }),
 
-  openExternal: (url: string) => warn(`openExternal(${url})`),
-  openLocalFile: (url: string) => warn(`openLocalFile(${url})`),
-  openPath: async () => {},
-  revealPath: async () => false,
+  openExternal: (url: string) => {
+    void invoke<void>("open_external", { url }).catch((error) => console.warn("[tauri-api] openExternal failed", error))
+  },
+  openLocalFile: (url: string) => {
+    void invoke<void>("open_local_file", { url }).catch((error) => console.warn("[tauri-api] openLocalFile failed", error))
+  },
+  openPath: (path: string, app?: string) => invoke<void>("open_path", { path, withApp: app ?? null }),
+  revealPath: (path: string) => invoke<boolean>("reveal_path", { path }),
   readClipboardImage: async () => null,
 
   getWindowFocused: () => getCurrentWindow().isFocused(),

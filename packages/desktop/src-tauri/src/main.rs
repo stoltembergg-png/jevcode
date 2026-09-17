@@ -1,7 +1,9 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use std::collections::{HashMap, HashSet};
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
+use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
@@ -9,6 +11,8 @@ use base64::Engine;
 use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_deep_link::DeepLinkExt;
+use tauri_plugin_dialog::DialogExt;
+use tauri_plugin_opener::OpenerExt;
 use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
 
@@ -262,6 +266,410 @@ fn kill_sidecar(state: State<'_, ShellState>) {
     *state.ready.lock().unwrap() = None;
 }
 
+// ---------------------------------------------------------------------------
+// Native pickers and shell integration
+//
+// Mirrors packages/desktop/src/main/attachment-picker.ts and ipc.ts: files are
+// picked through native dialogs, authorized by a one-shot token with a shared
+// byte budget, and read by exact path. Shell actions mirror external-url.ts and
+// apps.ts (allowlists, `where` resolution).
+// ---------------------------------------------------------------------------
+
+/// Mirrors MAX_ATTACHMENT_BYTES in attachment-picker.ts.
+const MAX_ATTACHMENT_BYTES: u64 = 20 * 1024 * 1024;
+
+#[derive(Default)]
+struct PickedFiles {
+    selections: Mutex<HashMap<String, PickedSelection>>,
+}
+
+struct PickedSelection {
+    paths: HashSet<String>,
+    remaining: u64,
+}
+
+#[derive(serde::Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+struct DirectoryPickerOptions {
+    multiple: Option<bool>,
+    title: Option<String>,
+    default_path: Option<String>,
+}
+
+#[derive(serde::Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+struct FilePickerOptions {
+    multiple: Option<bool>,
+    title: Option<String>,
+    default_path: Option<String>,
+    extensions: Option<Vec<String>>,
+}
+
+#[derive(serde::Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+struct SavePickerOptions {
+    title: Option<String>,
+    default_path: Option<String>,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PickedFileInfo {
+    path: String,
+    name: String,
+    size: u64,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PickedFilesResult {
+    token: String,
+    files: Vec<PickedFileInfo>,
+}
+
+#[tauri::command]
+async fn open_directory_picker(
+    app: AppHandle,
+    opts: Option<DirectoryPickerOptions>,
+) -> Result<Option<Value>, String> {
+    let opts = opts.unwrap_or_default();
+    let mut builder = app.dialog().file();
+    if let Some(title) = opts.title {
+        builder = builder.set_title(title);
+    }
+    if let Some(directory) = opts.default_path {
+        builder = builder.set_directory(directory);
+    }
+    let multiple = opts.multiple.unwrap_or(false);
+    let paths: Vec<PathBuf> = if multiple {
+        builder
+            .blocking_pick_folders()
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|path| path.into_path().ok())
+            .collect()
+    } else {
+        builder
+            .blocking_pick_folder()
+            .and_then(|path| path.into_path().ok())
+            .into_iter()
+            .collect()
+    };
+    if paths.is_empty() {
+        return Ok(None);
+    }
+    let display: Vec<String> = paths.iter().map(|path| path.to_string_lossy().to_string()).collect();
+    if multiple {
+        Ok(Some(json!(display)))
+    } else {
+        Ok(Some(json!(display[0])))
+    }
+}
+
+#[tauri::command]
+async fn open_file_picker(
+    app: AppHandle,
+    state: State<'_, PickedFiles>,
+    opts: Option<FilePickerOptions>,
+) -> Result<Option<PickedFilesResult>, String> {
+    let opts = opts.unwrap_or_default();
+    let mut builder = app.dialog().file();
+    if let Some(title) = opts.title {
+        builder = builder.set_title(title);
+    }
+    if let Some(directory) = opts.default_path {
+        builder = builder.set_directory(directory);
+    }
+    if let Some(extensions) = opts.extensions.filter(|list| !list.is_empty()) {
+        // TODO(i18n): the filter label should come from the native translations bundle.
+        let refs: Vec<&str> = extensions.iter().map(|value| value.as_str()).collect();
+        builder = builder.add_filter("Files", &refs);
+    }
+    let mut selected: Vec<PathBuf> = builder
+        .blocking_pick_files()
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|path| path.into_path().ok())
+        .collect();
+    if !opts.multiple.unwrap_or(false) {
+        selected.truncate(1);
+    }
+    if selected.is_empty() {
+        return Ok(None);
+    }
+
+    let mut files = Vec::new();
+    let mut total = 0u64;
+    for path in selected {
+        let metadata = std::fs::metadata(&path).map_err(|error| format!("stat {}: {error}", path.display()))?;
+        total += metadata.len();
+        files.push(PickedFileInfo {
+            path: path.to_string_lossy().to_string(),
+            name: path
+                .file_name()
+                .map(|name| name.to_string_lossy().to_string())
+                .unwrap_or_default(),
+            size: metadata.len(),
+        });
+    }
+    if total > MAX_ATTACHMENT_BYTES {
+        return Err(format!(
+            "attachment budget exceeded ({} MB)",
+            MAX_ATTACHMENT_BYTES / 1024 / 1024
+        ));
+    }
+
+    let token = uuid::Uuid::new_v4().to_string();
+    state.selections.lock().unwrap().insert(
+        token.clone(),
+        PickedSelection {
+            paths: files.iter().map(|file| file.path.clone()).collect(),
+            remaining: MAX_ATTACHMENT_BYTES,
+        },
+    );
+    Ok(Some(PickedFilesResult { token, files }))
+}
+
+#[tauri::command]
+fn read_picked_file(state: State<'_, PickedFiles>, token: String, path: String) -> Result<tauri::ipc::Response, String> {
+    let mut selections = state.selections.lock().unwrap();
+    let selection = selections.get_mut(&token).ok_or("file was not selected")?;
+    if !selection.paths.remove(&path) {
+        return Err("file was not selected".into());
+    }
+    let metadata = std::fs::metadata(&path).map_err(|error| format!("stat {path}: {error}"))?;
+    if metadata.len() > selection.remaining {
+        return Err("attachment budget exceeded".into());
+    }
+    let bytes = std::fs::read(&path).map_err(|error| format!("read {path}: {error}"))?;
+    selection.remaining = selection.remaining.saturating_sub(bytes.len() as u64);
+    if selection.paths.is_empty() {
+        selections.remove(&token);
+    }
+    Ok(tauri::ipc::Response::new(bytes))
+}
+
+#[tauri::command]
+fn release_picked_files(state: State<'_, PickedFiles>, token: String) {
+    state.selections.lock().unwrap().remove(&token);
+}
+
+#[tauri::command]
+async fn save_file_picker(app: AppHandle, opts: Option<SavePickerOptions>) -> Result<Option<String>, String> {
+    let opts = opts.unwrap_or_default();
+    let mut builder = app.dialog().file();
+    if let Some(title) = opts.title {
+        builder = builder.set_title(title);
+    }
+    if let Some(path) = opts.default_path {
+        builder = builder.set_directory(path);
+    }
+    Ok(builder
+        .blocking_save_file()
+        .and_then(|path| path.into_path().ok())
+        .map(|path| path.to_string_lossy().to_string()))
+}
+
+/// Mirrors resolveExternalURL in external-url.ts.
+#[tauri::command]
+fn open_external(app: AppHandle, url: String) -> Result<(), String> {
+    let parsed = tauri::Url::parse(&url).map_err(|error| format!("invalid url: {error}"))?;
+    match parsed.scheme() {
+        "http" | "https" | "mailto" => app.opener().open_url(url, None::<String>).map_err(|error| error.to_string()),
+        other => Err(format!("scheme not allowed: {other}")),
+    }
+}
+
+/// Mirrors resolveLocalFilePath in external-url.ts: `file:` with no host only.
+#[tauri::command]
+fn open_local_file(app: AppHandle, url: String) -> Result<(), String> {
+    let parsed = tauri::Url::parse(&url).map_err(|error| format!("invalid url: {error}"))?;
+    if parsed.scheme() != "file" || parsed.host_str().is_some() {
+        return Err("only local file:// urls are allowed".into());
+    }
+    let path = parsed.to_file_path().map_err(|_| "invalid file url".to_string())?;
+    app.opener()
+        .open_path(path.to_string_lossy().to_string(), None::<String>)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn open_path(app: AppHandle, path: String, with_app: Option<String>) -> Result<(), String> {
+    match with_app {
+        None => app
+            .opener()
+            .open_path(path, None::<String>)
+            .map_err(|error| error.to_string()),
+        Some(app_name) => {
+            let (command, args) = if cfg!(target_os = "macos") {
+                ("open".to_string(), vec!["-a".to_string(), app_name, path])
+            } else {
+                (app_name, vec![path])
+            };
+            std::process::Command::new(command)
+                .args(args)
+                .spawn()
+                .map(|_| ())
+                .map_err(|error| error.to_string())
+        }
+    }
+}
+
+#[tauri::command]
+fn reveal_path(app: AppHandle, path: String) -> Result<bool, String> {
+    if !std::path::Path::new(&path).exists() {
+        return Ok(false);
+    }
+    app.opener()
+        .reveal_item_in_dir(path)
+        .map_err(|error| error.to_string())?;
+    Ok(true)
+}
+
+#[tauri::command]
+fn check_app_exists(app_name: String) -> bool {
+    if cfg!(target_os = "macos") {
+        check_macos_app(&app_name)
+    } else {
+        true
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn check_macos_app(app_name: &str) -> bool {
+    let mut locations = vec![
+        PathBuf::from(format!("/Applications/{app_name}.app")),
+        PathBuf::from(format!("/System/Applications/{app_name}.app")),
+    ];
+    if let Some(home) = std::env::var_os("HOME") {
+        locations.push(PathBuf::from(home).join("Applications").join(format!("{app_name}.app")));
+    }
+    if locations.iter().any(|path| path.exists()) {
+        return true;
+    }
+    std::process::Command::new("which")
+        .arg(app_name)
+        .output()
+        .map(|output| output.status.success())
+        .unwrap_or(false)
+}
+
+#[cfg(not(target_os = "macos"))]
+fn check_macos_app(_app_name: &str) -> bool {
+    true
+}
+
+#[tauri::command]
+async fn resolve_app_path(app_name: String) -> Option<String> {
+    if !cfg!(target_os = "windows") {
+        return Some(app_name);
+    }
+    resolve_windows_app_path(&app_name)
+}
+
+/// Mirrors resolveWindowsAppPath in apps.ts.
+#[cfg(target_os = "windows")]
+fn resolve_windows_app_path(app_name: &str) -> Option<String> {
+    let output = std::process::Command::new("where").arg(app_name).output().ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let paths: Vec<String> = String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .map(|line| line.trim().to_string())
+        .filter(|line| !line.is_empty())
+        .collect();
+    let has_ext = |path: &str, ext: &str| path.to_lowercase().ends_with(&format!(".{ext}"));
+    if let Some(exe) = paths.iter().find(|path| has_ext(path, "exe")) {
+        return Some(exe.clone());
+    }
+    for path in &paths {
+        if has_ext(path, "cmd") || has_ext(path, "bat") {
+            if let Some(resolved) = resolve_cmd_shim(path) {
+                return Some(resolved);
+            }
+        }
+    }
+    let key: String = app_name
+        .chars()
+        .filter(|value| value.is_ascii_alphanumeric())
+        .collect::<String>()
+        .to_lowercase();
+    if !key.is_empty() {
+        for path in &paths {
+            let candidate = PathBuf::from(path);
+            let mut dirs = vec![candidate.parent().map(PathBuf::from)];
+            if let Some(parent) = candidate.parent().and_then(|value| value.parent()) {
+                dirs.push(Some(PathBuf::from(parent)));
+            }
+            for dir in dirs.into_iter().flatten() {
+                let Ok(entries) = std::fs::read_dir(&dir) else { continue };
+                for entry in entries.flatten() {
+                    let name = entry.file_name().to_string_lossy().to_string();
+                    if !name.to_lowercase().ends_with(".exe") {
+                        continue;
+                    }
+                    let stem: String = name
+                        .trim_end_matches(".exe")
+                        .trim_end_matches(".EXE")
+                        .chars()
+                        .filter(|value| value.is_ascii_alphanumeric())
+                        .collect::<String>()
+                        .to_lowercase();
+                    if stem.contains(&key) || key.contains(&stem) {
+                        return Some(entry.path().to_string_lossy().to_string());
+                    }
+                }
+            }
+        }
+    }
+    paths.first().cloned()
+}
+
+#[cfg(not(target_os = "windows"))]
+fn resolve_windows_app_path(_app_name: &str) -> Option<String> {
+    None
+}
+
+/// Resolves `%~dp0` indirection inside .cmd/.bat shims (as apps.ts does).
+#[cfg(target_os = "windows")]
+fn resolve_cmd_shim(path: &str) -> Option<String> {
+    let content = std::fs::read_to_string(path).ok()?;
+    for token in content.split('"').map(|value| value.trim()) {
+        let lower = token.to_lowercase();
+        if !lower.contains(".exe") {
+            continue;
+        }
+        if let Some(index) = lower.find("%~dp0") {
+            let base = PathBuf::from(path).parent()?.to_path_buf();
+            let suffix = &token[index + 5..];
+            let mut resolved = base;
+            for part in suffix.replace('/', "\\").split('\\') {
+                if part.is_empty() || part == "." {
+                    continue;
+                }
+                if part == ".." {
+                    resolved = resolved.parent().map(PathBuf::from).unwrap_or(resolved);
+                } else {
+                    resolved = resolved.join(part);
+                }
+            }
+            if resolved.exists() {
+                return Some(resolved.to_string_lossy().to_string());
+            }
+        }
+        if PathBuf::from(token).exists() {
+            return Some(token.to_string());
+        }
+    }
+    None
+}
+
+#[cfg(not(target_os = "windows"))]
+fn resolve_cmd_shim(_path: &str) -> Option<String> {
+    None
+}
+
 fn main() {
     tauri::Builder::default()
         // Must be registered before the deep-link plugin so second launches are
@@ -277,8 +685,11 @@ fn main() {
             }
         }))
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_deep_link::init())
         .manage(ShellState::default())
+        .manage(PickedFiles::default())
         // Diagnostics for the bootstrap phase: log page loads and, once the page is
         // finished, evaluate a probe script that reports what the webview can see.
         .on_page_load(|webview, payload| {
@@ -314,6 +725,15 @@ fn main() {
   } catch (error) {
     try { await window.__TAURI_INTERNALS__.invoke("log_stub", { message: "eval-error " + String(error) }) } catch {}
   }
+  // Temporary self-test for the picker/opener slice (dialog flows need a human).
+  try {
+    const appExists = await invoke("check_app_exists", { appName: "explorer.exe" });
+    const appPath = await invoke("resolve_app_path", { appName: "cmd" });
+    const revealed = await invoke("reveal_path", { path: "D:\\Projetos\\JevCode\\package.json" });
+    await invoke("log_stub", { message: "shell self-test " + JSON.stringify({ appExists, appPath, revealed }) });
+  } catch (error) {
+    await invoke("log_stub", { message: "shell self-test failed " + String(error) });
+  }
 })()"#,
                 );
             }
@@ -330,7 +750,18 @@ fn main() {
             store_length,
             log_stub,
             set_zoom,
-            kill_sidecar
+            kill_sidecar,
+            open_directory_picker,
+            open_file_picker,
+            read_picked_file,
+            release_picked_files,
+            save_file_picker,
+            open_external,
+            open_local_file,
+            open_path,
+            reveal_path,
+            check_app_exists,
+            resolve_app_path
         ])
         .setup(|app| {
             let handle = app.handle().clone();
