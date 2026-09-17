@@ -114,6 +114,10 @@ APIs (do not copy code blindly):
   `utils` (sidecar binary table keyed by Rust target triple).
 - macOS-only native menu structure and the native i18n delivery flow.
 - `install_cli` / `sync_cli` approach (repo `install` script, `--binary` argument).
+- The `capabilities/default.json` permission list — it already names the ACL entries
+  a desktop shell needs (`core:window:allow-start-dragging`,
+  `core:webview:allow-set-webview-zoom`, `core:window:allow-set-theme`, updater /
+  store / window-state / deep-link / opener defaults).
 
 Rewrite instead of port:
 
@@ -281,9 +285,12 @@ and run locally):
 - Re-verified with the patched probe on a non-elevated run: the cleanup killed
   every spawned pid (`pids: [12164, 12228]`, no orphans) and zoom applied with a
   JS read-back of `devicePixelRatio = 1.5` for a requested 1.5.
-- Not covered by automation, needs a human check: actual window dragging through
-  `data-tauri-drag-region` (still unconfirmed), and whether zoom visually scales
-  CSS layout (DPR changes; visual scaling not yet eyeballed).
+- **Drag region needs an ACL permission.** `data-tauri-drag-region` did nothing on
+  the Windows probe until `core:window:allow-start-dragging` was added to a
+  capabilities file (the old Tauri baseline carried exactly that permission). The
+  probe now ships `capabilities/default.json` with `core:default` plus that entry.
+- Still not covered by automation: whether zoom visually scales CSS layout (DPR
+  changes; visual scaling not eyeballed) and macOS drag behaviour.
 
 ### Spike 3 — macOS probe on CI
 
@@ -300,6 +307,10 @@ root ignores `dist/`, so the probe's static page was never committed, the path d
 not exist on the runner and `tauri-build` panicked (`The frontendDist configuration
 is set to "../dist" but this path doesn't exist`). The probe now serves from
 `public/`.
+
+Second CI gotcha: Tauri validates the icon list at compile time (`generate_context!`),
+so a Windows-only icon set fails on macOS. The probe now ships `icons/icon.png`
+alongside `icons/icon.ico` and names both in `bundle.icon`.
 
 Operational note found during the Windows probe:
 
