@@ -278,8 +278,12 @@ and run locally):
   (a) `tauri-plugin-shell` `externalBin` (`binaries/opencode-cli-$TARGET_TRIPLE.exe`)
   and (b) `std::process::Command` with an absolute path. Killing the exact spawned
   PID (and its child) worked in both cases.
+- Re-verified with the patched probe on a non-elevated run: the cleanup killed
+  every spawned pid (`pids: [12164, 12228]`, no orphans) and zoom applied with a
+  JS read-back of `devicePixelRatio = 1.5` for a requested 1.5.
 - Not covered by automation, needs a human check: actual window dragging through
-  `data-tauri-drag-region`, and whether zoom scales CSS layout (not only DPR).
+  `data-tauri-drag-region` (still unconfirmed), and whether zoom visually scales
+  CSS layout (DPR changes; visual scaling not yet eyeballed).
 
 ### Spike 3 — macOS probe on CI
 
@@ -290,6 +294,12 @@ macOS sidecar (`bun run build --single --skip-embed-web-ui`), stages it as an
 `tauri-p0-report.json`. This validates compilation and runtime on WKWebView
 (window creation, `set_zoom`, sidecar spawn + `/global/health`). Visual and drag
 confirmation on macOS still needs a human with a Mac.
+
+CI gotcha: `frontendDist` must not point into a `.gitignore`d path. The repository
+root ignores `dist/`, so the probe's static page was never committed, the path did
+not exist on the runner and `tauri-build` panicked (`The frontendDist configuration
+is set to "../dist" but this path doesn't exist`). The probe now serves from
+`public/`.
 
 Operational note found during the Windows probe:
 
