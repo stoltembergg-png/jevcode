@@ -174,6 +174,78 @@ fn get_window_id(state: State<'_, ShellState>) -> String {
     state.window_id.lock().unwrap().clone().unwrap_or_default()
 }
 
+// Keep the same on-disk shape as the Electron shell: one JSON object per store,
+// written to `<app data>/<name>` with no extension.
+fn store_file(app: &AppHandle, name: &str) -> Result<std::path::PathBuf, String> {
+    let dir = app.path().app_data_dir().map_err(|error| format!("app data dir: {error}"))?;
+    std::fs::create_dir_all(&dir).map_err(|error| format!("mkdir: {error}"))?;
+    Ok(dir.join(name))
+}
+
+fn store_read(app: &AppHandle, name: &str) -> Result<serde_json::Map<String, Value>, String> {
+    let path = store_file(app, name)?;
+    match std::fs::read_to_string(&path) {
+        Ok(text) => match serde_json::from_str::<Value>(&text) {
+            Ok(Value::Object(map)) => Ok(map),
+            Ok(_) => Ok(serde_json::Map::new()),
+            Err(error) => Err(format!("parse {}: {error}", path.display())),
+        },
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(serde_json::Map::new()),
+        Err(error) => Err(format!("read {}: {error}", path.display())),
+    }
+}
+
+fn store_write(app: &AppHandle, name: &str, map: &serde_json::Map<String, Value>) -> Result<(), String> {
+    let path = store_file(app, name)?;
+    let text = serde_json::to_string_pretty(&Value::Object(map.clone())).map_err(|error| format!("encode: {error}"))?;
+    std::fs::write(&path, text).map_err(|error| format!("write {}: {error}", path.display()))
+}
+
+#[tauri::command]
+fn store_get(app: AppHandle, name: String, key: String) -> Result<Option<String>, String> {
+    let map = store_read(&app, &name)?;
+    Ok(map.get(&key).map(|value| match value {
+        Value::String(text) => text.clone(),
+        other => other.to_string(),
+    }))
+}
+
+#[tauri::command]
+fn store_set(app: AppHandle, name: String, key: String, value: String) -> Result<(), String> {
+    let mut map = store_read(&app, &name)?;
+    map.insert(key, Value::String(value));
+    store_write(&app, &name, &map)
+}
+
+#[tauri::command]
+fn store_delete(app: AppHandle, name: String, key: String) -> Result<(), String> {
+    let mut map = store_read(&app, &name)?;
+    map.remove(&key);
+    store_write(&app, &name, &map)
+}
+
+#[tauri::command]
+fn store_clear(app: AppHandle, name: String) -> Result<(), String> {
+    store_write(&app, &name, &serde_json::Map::new())
+}
+
+#[tauri::command]
+fn store_keys(app: AppHandle, name: String) -> Result<Vec<String>, String> {
+    Ok(store_read(&app, &name)?.keys().cloned().collect())
+}
+
+#[tauri::command]
+fn store_length(app: AppHandle, name: String) -> Result<usize, String> {
+    Ok(store_read(&app, &name)?.len())
+}
+
+/// Lets the stub page report its checks to stdout so the shell can be verified
+/// without looking at the screen.
+#[tauri::command]
+fn log_stub(message: String) {
+    println!("[stub] {message}");
+}
+
 fn main() {
     tauri::Builder::default()
         // Must be registered before the deep-link plugin so second launches are
@@ -192,10 +264,42 @@ fn main() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_deep_link::init())
         .manage(ShellState::default())
+        // Diagnostics for the bootstrap phase: log page loads and, once the page is
+        // finished, evaluate a probe script that reports what the webview can see.
+        .on_page_load(|webview, payload| {
+            println!("[page] {:?} {}", payload.event(), payload.url());
+            if let tauri::webview::PageLoadEvent::Finished = payload.event() {
+                let _ = webview.eval(
+                    r#"(async () => {
+  const report = {
+    hasGlobal: !!window.__TAURI__,
+    hasInternals: !!window.__TAURI_INTERNALS__,
+    readyState: document.readyState,
+    title: document.title,
+  };
+  const invoke = (window.__TAURI_INTERNALS__ && window.__TAURI_INTERNALS__.invoke) ||
+    (window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.invoke);
+  if (!invoke) { console.error("no invoke bridge", report); return }
+  try {
+    await invoke("log_stub", { message: "eval " + JSON.stringify(report) });
+  } catch (error) {
+    try { await window.__TAURI_INTERNALS__.invoke("log_stub", { message: "eval-error " + String(error) }) } catch {}
+  }
+})()"#,
+                );
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             await_initialization,
             consume_initial_deep_links,
-            get_window_id
+            get_window_id,
+            store_get,
+            store_set,
+            store_delete,
+            store_clear,
+            store_keys,
+            store_length,
+            log_stub
         ])
         .setup(|app| {
             let handle = app.handle().clone();
