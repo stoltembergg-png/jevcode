@@ -807,6 +807,7 @@ fn resolve_cmd_shim(path: &str) -> Option<String> {
 }
 
 #[cfg(not(target_os = "windows"))]
+#[allow(dead_code)]
 fn resolve_cmd_shim(_path: &str) -> Option<String> {
     None
 }
