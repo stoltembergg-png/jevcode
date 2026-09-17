@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "identifier": "com.p0.probe",
   "build": {
-    "frontendDist": "../dist"
+    "frontendDist": "../public"
   },
   "app": {
     "withGlobalTauri": true,
