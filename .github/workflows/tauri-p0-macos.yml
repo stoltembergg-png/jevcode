@@ -6,6 +6,11 @@ name: tauri-p0-macos
 
 on:
   workflow_dispatch:
+  push:
+    branches: [tauri-p0-spikes]
+    paths:
+      - "artifacts/tauri-p0-probe/**"
+      - ".github/workflows/tauri-p0-macos.yml"
 
 concurrency:
   group: tauri-p0-macos-${{ github.ref }}
