@@ -402,6 +402,33 @@ Notes and follow-ups:
 - i18n gap: the file-dialog filter label is the literal `"Files"` until the native
   translations bundle slice lands.
 
+### Slice 2 — drafts, window state, recovery — PASS
+
+- **Drafts**: `rusqlite` (bundled) with the exact Electron schema
+  (`document(key, value)`, `blob(id, data)`, WAL) at `<app data>/drafts.sqlite`, so an
+  existing Electron `drafts.sqlite` keeps working. Blobs are sha256-addressed; writes
+  land immediately instead of Electron's 500 ms flush; orphan blobs are garbage
+  collected at startup. Blob transfers use raw IPC bodies
+  (`invoke("draft_blob_put", new Uint8Array(...))` / `tauri::ipc::Response` for reads),
+  with a `draft_blob_has` probe preserving the `ArrayBuffer | null` contract.
+- **Window state**: `<app data>/window-state.json` (`x`, `y`, `width`, `height`,
+  `maximized`). Saved on `CloseRequested`/`ExitRequested` — not on `RunEvent::Exit`,
+  where the window is already gone — and restored before the window is shown. When a
+  maximized window has no previously recorded normal bounds, the current geometry is
+  stored as a fallback so the file never persists zeros.
+- **Recovery**: an unexpected sidecar termination now emits `sidecar-terminated` and
+  restarts the server on the **same port** (up to two attempts), so the renderer's URL
+  stays valid. Tauri does not expose unresponsive-renderer detection, so Electron's
+  recovery dialog for unresponsive/crashed renderers is covered instead by the app's
+  own connection UI plus this sidecar restart; document any residual gap when the
+  renderer-side recovery UX is revisited.
+
+Verified: draft round trip and blob hashing/readback via the shell self-test
+(`{"value":"ok","blobId":"c2752ad96ee6","has":true,"text":"blob-data","missing":false}`);
+killing the sidecar produced `sidecar terminated` → `restarting sidecar (attempt 1)` →
+`server ready` on the same port; window state round-tripped for normal
+(`1200x800 at 1230,90`) and maximized (`2560x1032 at -8,-8, maximized=true`) windows.
+
 ## Cross-cutting tasks
 
 - **Bridge contract test**: assert that every method on the `window.api` shim has a

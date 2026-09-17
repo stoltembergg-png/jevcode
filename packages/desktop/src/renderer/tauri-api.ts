@@ -80,11 +80,12 @@ const tauriApi = {
   storeKeys,
   storeLength,
 
-  draftGet: async () => null,
-  draftSet: async () => {},
-  draftDelete: async () => {},
-  draftBlobPut: async () => crypto.randomUUID(),
-  draftBlobGet: async () => null,
+  draftGet: (key: string) => invoke<string | null>("draft_get", { key }),
+  draftSet: (key: string, value: string) => invoke<void>("draft_set", { key, value }),
+  draftDelete: (key: string) => invoke<void>("draft_delete", { key }),
+  draftBlobPut: (data: ArrayBuffer) => invoke<string>("draft_blob_put", new Uint8Array(data)),
+  draftBlobGet: async (id: string) =>
+    (await invoke<boolean>("draft_blob_has", { id })) ? invoke<ArrayBuffer>("draft_blob_get", { id }) : null,
 
   getWindowID: () => invoke<string>("get_window_id"),
   onMenuCommand: (callback: (id: string) => void) => subscribe<string>("menu-command", callback),

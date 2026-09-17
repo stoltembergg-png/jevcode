@@ -8,6 +8,7 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use base64::Engine;
+use rusqlite::OptionalExtension;
 use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_deep_link::DeepLinkExt;
@@ -25,12 +26,23 @@ struct Ready {
     password: String,
 }
 
+/// The local server coordinates chosen at startup. Kept so an unexpected sidecar
+/// termination can be recovered on the same port (the renderer's URL stays valid).
+#[derive(Clone)]
+struct Endpoint {
+    port: u16,
+    username: String,
+    password: String,
+}
+
 #[derive(Default)]
 struct ShellState {
     child: Mutex<Option<CommandChild>>,
     ready: Mutex<Option<Ready>>,
     window_id: Mutex<Option<String>>,
     pending_deep_links: Mutex<Vec<String>>,
+    endpoint: Mutex<Option<Endpoint>>,
+    stopping: Mutex<bool>,
 }
 
 fn free_port() -> Result<u16, String> {
@@ -70,7 +82,11 @@ fn http_health(port: u16, password: &str) -> Result<u16, String> {
 /// Spawns the bundled opencode server as a sidecar and waits until it is healthy.
 /// Runs on a dedicated thread so the window can paint the loading state immediately.
 fn start_sidecar(app: &AppHandle) {
-    let state = app.state::<ShellState>();
+    let endpoint = Endpoint {
+        port: 0,
+        username: "opencode".to_string(),
+        password: uuid::Uuid::new_v4().to_string(),
+    };
     let port = match free_port() {
         Ok(port) => port,
         Err(error) => {
@@ -78,8 +94,15 @@ fn start_sidecar(app: &AppHandle) {
             return;
         }
     };
-    let username = "opencode".to_string();
-    let password = uuid::Uuid::new_v4().to_string();
+    let endpoint = Endpoint { port, ..endpoint };
+    *app.state::<ShellState>().endpoint.lock().unwrap() = Some(endpoint.clone());
+    spawn_sidecar(app, endpoint, 0);
+}
+
+/// Spawns the sidecar for a given endpoint. On unexpected termination it is
+/// restarted on the same port (up to two attempts) instead of leaving the app
+/// connected to a dead server.
+fn spawn_sidecar(app: &AppHandle, endpoint: Endpoint, attempt: u32) {
     let state_dir = app.path().app_local_data_dir().ok().map(|dir| dir.join("state"));
     if let Some(dir) = &state_dir {
         let _ = std::fs::create_dir_all(dir);
@@ -96,11 +119,11 @@ fn start_sidecar(app: &AppHandle) {
                     "--hostname",
                     "127.0.0.1",
                     "--port",
-                    &port.to_string(),
+                    &endpoint.port.to_string(),
                     "--print-logs",
                 ])
-                .env("OPENCODE_SERVER_USERNAME", username.clone())
-                .env("OPENCODE_SERVER_PASSWORD", password.clone());
+                .env("OPENCODE_SERVER_USERNAME", endpoint.username.clone())
+                .env("OPENCODE_SERVER_PASSWORD", endpoint.password.clone());
             let command = match &state_dir {
                 Some(dir) => command.env("XDG_STATE_HOME", dir.to_string_lossy().to_string()),
                 None => command,
@@ -115,39 +138,63 @@ fn start_sidecar(app: &AppHandle) {
             return;
         }
     };
-    println!("[shell] sidecar spawned pid={} port={port}", child.pid());
-    *state.child.lock().unwrap() = Some(child);
+    println!("[shell] sidecar spawned pid={} port={}", child.pid(), endpoint.port);
+    *app.state::<ShellState>().child.lock().unwrap() = Some(child);
 
-    // Drain sidecar output so its pipes never block.
+    // Drain output and react to unexpected termination.
+    let handle = app.clone();
+    let endpoint_for_drain = endpoint.clone();
     tauri::async_runtime::spawn(async move {
         while let Some(event) = events.recv().await {
             match event {
                 CommandEvent::Stdout(line) => println!("[sidecar] {}", String::from_utf8_lossy(&line).trim_end()),
                 CommandEvent::Stderr(line) => eprintln!("[sidecar] {}", String::from_utf8_lossy(&line).trim_end()),
+                CommandEvent::Terminated(payload) => {
+                    println!("[shell] sidecar terminated: {payload:?}");
+                    let state = handle.state::<ShellState>();
+                    state.child.lock().unwrap().take();
+                    *state.ready.lock().unwrap() = None;
+                    let stopping = *state.stopping.lock().unwrap();
+                    if stopping {
+                        return;
+                    }
+                    let _ = handle.emit("sidecar-terminated", ());
+                    if attempt < 2 {
+                        println!("[shell] restarting sidecar (attempt {})", attempt + 1);
+                        spawn_sidecar(&handle, endpoint_for_drain.clone(), attempt + 1);
+                    } else {
+                        eprintln!("[shell] sidecar restart limit reached");
+                    }
+                }
                 _ => {}
             }
         }
     });
 
-    let started = Instant::now();
-    loop {
-        if started.elapsed() > READY_TIMEOUT {
-            eprintln!("[shell] server did not become healthy within {}s", READY_TIMEOUT.as_secs());
-            return;
+    // Health poll (also re-runs after a restart so `server-ready` fires again).
+    let poll_handle = app.clone();
+    let poll_endpoint = endpoint.clone();
+    std::thread::spawn(move || {
+        let started = Instant::now();
+        loop {
+            if started.elapsed() > READY_TIMEOUT {
+                eprintln!("[shell] server did not become healthy within {}s", READY_TIMEOUT.as_secs());
+                return;
+            }
+            if let Ok(200) = http_health(poll_endpoint.port, &poll_endpoint.password) {
+                let url = format!("http://127.0.0.1:{}", poll_endpoint.port);
+                println!("[shell] server ready at {url}");
+                *poll_handle.state::<ShellState>().ready.lock().unwrap() = Some(Ready {
+                    url: url.clone(),
+                    username: poll_endpoint.username.clone(),
+                    password: poll_endpoint.password.clone(),
+                });
+                let _ = poll_handle.emit("server-ready", json!({ "url": url }));
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(300));
         }
-        if let Ok(200) = http_health(port, &password) {
-            let url = format!("http://127.0.0.1:{port}");
-            println!("[shell] server ready at {url}");
-            *app.state::<ShellState>().ready.lock().unwrap() = Some(Ready {
-                url: url.clone(),
-                username,
-                password,
-            });
-            let _ = app.emit("server-ready", json!({ "url": url }));
-            return;
-        }
-        std::thread::sleep(Duration::from_millis(300));
-    }
+    });
 }
 
 #[tauri::command]
@@ -259,6 +306,7 @@ fn set_zoom(window: tauri::WebviewWindow, factor: f64) -> Result<(), String> {
 
 #[tauri::command]
 fn kill_sidecar(state: State<'_, ShellState>) {
+    *state.stopping.lock().unwrap() = true;
     if let Some(child) = state.child.lock().unwrap().take() {
         let _ = child.kill();
         println!("[shell] sidecar killed on request");
@@ -670,6 +718,232 @@ fn resolve_cmd_shim(_path: &str) -> Option<String> {
     None
 }
 
+// ---------------------------------------------------------------------------
+// Drafts (sqlite) — same schema as packages/desktop/src/main/draft-store.ts so
+// an existing Electron drafts.sqlite keeps working unchanged.
+// ---------------------------------------------------------------------------
+
+const DRAFTS_FILE: &str = "drafts.sqlite";
+
+struct DraftStore {
+    conn: Mutex<rusqlite::Connection>,
+}
+
+impl DraftStore {
+    fn open(path: &std::path::Path) -> Result<Self, String> {
+        let conn = rusqlite::Connection::open(path).map_err(|error| format!("open drafts db: {error}"))?;
+        conn.execute_batch(
+            "PRAGMA journal_mode=WAL;
+             CREATE TABLE IF NOT EXISTS document (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+             CREATE TABLE IF NOT EXISTS blob (id TEXT PRIMARY KEY, data BLOB NOT NULL);",
+        )
+        .map_err(|error| format!("init drafts db: {error}"))?;
+        let store = Self { conn: Mutex::new(conn) };
+        if let Err(error) = store.gc_orphan_blobs() {
+            eprintln!("[drafts] gc failed: {error}");
+        }
+        Ok(store)
+    }
+
+    /// Removes blobs no document references (mirrors the startup GC in draft-store.ts).
+    fn gc_orphan_blobs(&self) -> Result<(), String> {
+        let conn = self.conn.lock().unwrap();
+        let mut used = HashSet::new();
+        {
+            let mut statement = conn.prepare("SELECT value FROM document").map_err(|error| error.to_string())?;
+            let values = statement
+                .query_map([], |row| row.get::<_, String>(0))
+                .map_err(|error| error.to_string())?;
+            for value in values {
+                let value = value.map_err(|error| error.to_string())?;
+                if let Ok(parsed) = serde_json::from_str::<Value>(&value) {
+                    collect_blob_ids(&parsed, &mut used);
+                }
+            }
+        }
+        let orphans: Vec<String> = {
+            let mut statement = conn.prepare("SELECT id FROM blob").map_err(|error| error.to_string())?;
+            let ids = statement
+                .query_map([], |row| row.get::<_, String>(0))
+                .map_err(|error| error.to_string())?;
+            ids.filter_map(|id| id.ok()).filter(|id| !used.contains(id)).collect()
+        };
+        for id in &orphans {
+            conn.execute("DELETE FROM blob WHERE id = ?1", [id]).map_err(|error| error.to_string())?;
+        }
+        if !orphans.is_empty() {
+            println!("[drafts] removed {} orphan blob(s)", orphans.len());
+        }
+        Ok(())
+    }
+}
+
+fn collect_blob_ids(value: &Value, used: &mut HashSet<String>) {
+    match value {
+        Value::Object(map) => {
+            if let Some(Value::Object(blob)) = map.get("blob") {
+                if let Some(Value::String(id)) = blob.get("id") {
+                    used.insert(id.clone());
+                }
+            }
+            for child in map.values() {
+                collect_blob_ids(child, used);
+            }
+        }
+        Value::Array(items) => items.iter().for_each(|item| collect_blob_ids(item, used)),
+        _ => {}
+    }
+}
+
+#[tauri::command]
+fn draft_get(state: State<'_, DraftStore>, key: String) -> Result<Option<String>, String> {
+    let conn = state.conn.lock().unwrap();
+    conn.query_row("SELECT value FROM document WHERE key = ?1", [&key], |row| row.get::<_, String>(0))
+        .optional()
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn draft_set(state: State<'_, DraftStore>, key: String, value: String) -> Result<(), String> {
+    let conn = state.conn.lock().unwrap();
+    conn.execute(
+        "INSERT INTO document (key, value) VALUES (?1, ?2) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        rusqlite::params![key, value],
+    )
+    .map(|_| ())
+    .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn draft_delete(state: State<'_, DraftStore>, key: String) -> Result<(), String> {
+    let conn = state.conn.lock().unwrap();
+    conn.execute("DELETE FROM document WHERE key = ?1", [&key])
+        .map(|_| ())
+        .map_err(|error| error.to_string())
+}
+
+/// Blobs arrive as a raw request body (`invoke("draft_blob_put", new Uint8Array(...))`).
+#[tauri::command]
+fn draft_blob_put(state: State<'_, DraftStore>, request: tauri::ipc::Request<'_>) -> Result<String, String> {
+    let data = match request.body() {
+        tauri::ipc::InvokeBody::Raw(bytes) => bytes.clone(),
+        tauri::ipc::InvokeBody::Json(value) => {
+            serde_json::from_value::<Vec<u8>>(value.clone()).map_err(|error| error.to_string())?
+        }
+    };
+    use sha2::{Digest, Sha256};
+    let id = Sha256::digest(&data)
+        .iter()
+        .fold(String::with_capacity(64), |mut acc, byte| {
+            use std::fmt::Write as _;
+            let _ = write!(acc, "{byte:02x}");
+            acc
+        });
+    let conn = state.conn.lock().unwrap();
+    conn.execute("INSERT OR IGNORE INTO blob (id, data) VALUES (?1, ?2)", rusqlite::params![id, data])
+        .map_err(|error| error.to_string())?;
+    Ok(id)
+}
+
+#[tauri::command]
+fn draft_blob_has(state: State<'_, DraftStore>, id: String) -> Result<bool, String> {
+    let conn = state.conn.lock().unwrap();
+    let count: i64 = conn
+        .query_row("SELECT COUNT(1) FROM blob WHERE id = ?1", [&id], |row| row.get(0))
+        .map_err(|error| error.to_string())?;
+    Ok(count > 0)
+}
+
+#[tauri::command]
+fn draft_blob_get(state: State<'_, DraftStore>, id: String) -> Result<tauri::ipc::Response, String> {
+    let conn = state.conn.lock().unwrap();
+    let data: Vec<u8> = conn
+        .query_row("SELECT data FROM blob WHERE id = ?1", [&id], |row| row.get(0))
+        .map_err(|error| error.to_string())?;
+    Ok(tauri::ipc::Response::new(data))
+}
+
+// ---------------------------------------------------------------------------
+// Window state — geometry persisted in the app data dir (Electron used
+// electron-window-state with a different file shape, so this starts fresh).
+// ---------------------------------------------------------------------------
+
+#[derive(serde::Serialize, serde::Deserialize, Default)]
+struct WindowState {
+    x: i32,
+    y: i32,
+    width: u32,
+    height: u32,
+    #[serde(default)]
+    maximized: bool,
+}
+
+fn window_state_path(app: &AppHandle) -> Option<PathBuf> {
+    app.path().app_data_dir().ok().map(|dir| dir.join("window-state.json"))
+}
+
+fn read_window_state(app: &AppHandle) -> Option<WindowState> {
+    let text = std::fs::read_to_string(window_state_path(app)?).ok()?;
+    serde_json::from_str(&text).ok()
+}
+
+fn restore_window_state(app: &AppHandle) {
+    let Some(state) = read_window_state(app) else { return };
+    let Some(window) = app.get_webview_window("main") else { return };
+    if state.width > 0 && state.height > 0 {
+        let _ = window.set_size(tauri::LogicalSize::new(state.width as f64, state.height as f64));
+    }
+    if state.x != 0 || state.y != 0 {
+        let _ = window.set_position(tauri::LogicalPosition::new(state.x as f64, state.y as f64));
+    }
+    if state.maximized {
+        let _ = window.maximize();
+    }
+    println!("[window] restored {}x{} at {},{} (maximized={})", state.width, state.height, state.x, state.y, state.maximized);
+}
+
+fn save_window_state(app: &AppHandle) {
+    let Some(window) = app.get_webview_window("main") else { return };
+    let Some(path) = window_state_path(app) else { return };
+    let (maximized, minimized) = (
+        window.is_maximized().unwrap_or(false),
+        window.is_minimized().unwrap_or(false),
+    );
+    lock_window_state(&path, &window, maximized, minimized);
+}
+
+fn lock_window_state(path: &std::path::Path, window: &tauri::WebviewWindow, maximized: bool, minimized: bool) {
+    let mut state = read_window_state_from(path).unwrap_or_default();
+    let scale = window.scale_factor().unwrap_or(1.0);
+    let has_bounds = state.width > 0 && state.height > 0;
+    // Keep the last normal bounds; when the window is maximized or minimized but we
+    // have never recorded bounds, fall back to the current geometry so the file
+    // never persists zeros.
+    if (!maximized && !minimized) || !has_bounds {
+        if let Ok(size) = window.inner_size().map(|size| size.to_logical::<f64>(scale)) {
+            state.width = size.width.round() as u32;
+            state.height = size.height.round() as u32;
+        }
+        if let Ok(position) = window.outer_position().map(|position| position.to_logical::<f64>(scale)) {
+            state.x = position.x.round() as i32;
+            state.y = position.y.round() as i32;
+        }
+    }
+    state.maximized = maximized;
+    if let Ok(text) = serde_json::to_string(&state) {
+        if let Err(error) = std::fs::write(path, text) {
+            eprintln!("[window] failed to save state: {error}");
+        } else {
+            println!("[window] saved state");
+        }
+    }
+}
+
+fn read_window_state_from(path: &std::path::Path) -> Option<WindowState> {
+    let text = std::fs::read_to_string(path).ok()?;
+    serde_json::from_str(&text).ok()
+}
+
 fn main() {
     tauri::Builder::default()
         // Must be registered before the deep-link plugin so second launches are
@@ -734,6 +1008,20 @@ fn main() {
   } catch (error) {
     await invoke("log_stub", { message: "shell self-test failed " + String(error) });
   }
+  // Temporary self-test for the drafts slice (sqlite + blobs).
+  try {
+    await invoke("draft_set", { key: "p2.selftest", value: "ok" });
+    const value = await invoke("draft_get", { key: "p2.selftest" });
+    const blobId = await invoke("draft_blob_put", new TextEncoder().encode("blob-data"));
+    const has = await invoke("draft_blob_has", { id: blobId });
+    const bytes = await invoke("draft_blob_get", { id: blobId });
+    const text = new TextDecoder().decode(new Uint8Array(bytes));
+    const missing = await invoke("draft_blob_has", { id: "0".repeat(64) });
+    await invoke("draft_delete", { key: "p2.selftest" });
+    await invoke("log_stub", { message: "draft self-test " + JSON.stringify({ value, blobId: blobId.slice(0, 12), has, text, missing }) });
+  } catch (error) {
+    await invoke("log_stub", { message: "draft self-test failed " + String(error) });
+  }
 })()"#,
                 );
             }
@@ -761,11 +1049,30 @@ fn main() {
             open_path,
             reveal_path,
             check_app_exists,
-            resolve_app_path
+            resolve_app_path,
+            draft_get,
+            draft_set,
+            draft_delete,
+            draft_blob_put,
+            draft_blob_has,
+            draft_blob_get
         ])
         .setup(|app| {
             let handle = app.handle().clone();
             *handle.state::<ShellState>().window_id.lock().unwrap() = Some(uuid::Uuid::new_v4().to_string());
+
+            // Drafts database (same file/schema as the Electron shell).
+            if let Ok(dir) = handle.path().app_data_dir() {
+                let _ = std::fs::create_dir_all(&dir);
+                match DraftStore::open(&dir.join(DRAFTS_FILE)) {
+                    Ok(store) => {
+                        handle.manage(store);
+                    }
+                    Err(error) => eprintln!("[drafts] disabled: {error}"),
+                }
+            }
+
+            restore_window_state(&handle);
 
             // Deep links: queue whatever launched the app, then forward new ones.
             if let Ok(Some(urls)) = handle.deep_link().get_current() {
@@ -789,13 +1096,27 @@ fn main() {
         })
         .build(tauri::generate_context!())
         .expect("failed to build the Tauri application")
-        .run(|app, event| {
-            if let tauri::RunEvent::Exit = event {
+        .run(|app, event| match event {
+            // The window still exists here, unlike `Exit` (where it is already gone).
+            tauri::RunEvent::WindowEvent { label, event, .. } => {
+                if label == "main" {
+                    if let tauri::WindowEvent::CloseRequested { .. } = event {
+                        save_window_state(app);
+                    }
+                }
+            }
+            tauri::RunEvent::ExitRequested { .. } => {
+                *app.state::<ShellState>().stopping.lock().unwrap() = true;
+                save_window_state(app);
+            }
+            tauri::RunEvent::Exit => {
+                *app.state::<ShellState>().stopping.lock().unwrap() = true;
                 if let Some(child) = app.state::<ShellState>().child.lock().unwrap().take() {
                     let pid = child.pid();
                     let _ = child.kill();
                     println!("[shell] sidecar killed pid={pid}");
                 }
             }
+            _ => {}
         });
 }
