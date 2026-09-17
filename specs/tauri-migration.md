@@ -377,6 +377,31 @@ Notes and follow-ups:
   updater, logs/export, recovery dialog, drafts sqlite, opener, window state,
   titlebar theme/background color, zoom event sync.
 
+## P2 results
+
+### Slice 1 — native pickers, attachment tokens, opener — PASS
+
+- Rust commands mirror the Electron semantics in `attachment-picker.ts`, `ipc.ts`,
+  `external-url.ts` and `apps.ts`: directory/file/save pickers via
+  `tauri-plugin-dialog`; per-selection tokens with a shared 20 MB byte budget
+  (`read_picked_file` returns raw bytes through `tauri::ipc::Response`, one-shot per
+  path, released explicitly); `open_external` (http/https/mailto allowlist),
+  `open_local_file` (`file:` with no host), `open_path` (with an optional app),
+  `reveal_path`, `check_app_exists`, `resolve_app_path` (ported `where` + `.cmd`/`.bat`
+  `%~dp0` resolution) via `tauri-plugin-opener`.
+- The window sets `dragDropEnabled: false` so the renderer keeps using its DOM
+  drag-and-drop path exactly as under Electron. Trade-off: OS-dropped files no
+  longer carry an on-disk path (Electron recovered it with `webUtils.getPathForFile`);
+  restoring that needs the native drag-drop events plus a shim-side path map.
+- Verified: directory picker and file picker + attachment (token round trip)
+  confirmed by the user; `check_app_exists`/`resolve_app_path`/`reveal_path`
+  confirmed by an automated self-test in the shell log
+  (`{"appExists":true,"appPath":"C:\\Windows\\System32\\cmd.exe","revealed":true}`).
+  `open_external`'s positive path is user-verifiable through in-app links (same
+  opener call as `reveal_path`); its allowlist is code-reviewed only so far.
+- i18n gap: the file-dialog filter label is the literal `"Files"` until the native
+  translations bundle slice lands.
+
 ## Cross-cutting tasks
 
 - **Bridge contract test**: assert that every method on the `window.api` shim has a
