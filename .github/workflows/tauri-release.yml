@@ -5,6 +5,10 @@ name: tauri-release
 # secrets the workflow still produces unsigned installers, and signing switches on
 # by itself once the credentials exist (see specs/tauri-migration.md, "P4 prerequisites").
 #
+# The opencode sidecar is cross-compiled once on Ubuntu (the upstream layout): building
+# it natively on Windows trips Bun's lifecycle shim for tree-sitter-powershell, which
+# expects a node-gyp at the project root that the pinned Bun does not provide.
+#
 # Secret names (all optional):
 #   Updater:  TAURI_SIGNING_PRIVATE_KEY, TAURI_SIGNING_PRIVATE_KEY_PASSWORD
 #   Windows:  AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_TENANT_ID,
@@ -33,7 +37,30 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  sidecar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Build the opencode sidecar (cross-compiled)
+        working-directory: packages/opencode
+        run: bun run build --skip-embed-web-ui --targets=opencode-windows-x64,opencode-darwin-arm64
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: opencode-sidecar
+          path: packages/opencode/dist/
+
   build:
+    needs: sidecar
     strategy:
       fail-fast: false
       matrix:
@@ -84,9 +111,11 @@ jobs:
         with:
           workspaces: packages/desktop/src-tauri
 
-      - name: Build the opencode sidecar
-        working-directory: packages/opencode
-        run: bun run build --single --skip-embed-web-ui
+      - name: Download the cross-compiled sidecar
+        uses: actions/download-artifact@v4
+        with:
+          name: opencode-sidecar
+          path: packages/opencode/dist
 
       - name: Stage the sidecar for externalBin
         shell: bash
@@ -107,6 +136,8 @@ jobs:
               esac
               cp "packages/opencode/dist/${PLATFORM}/bin/opencode" \
                  "packages/desktop/src-tauri/binaries/opencode-cli-${TRIPLE}"
+              # Artifact downloads drop the executable bit.
+              chmod +x "packages/desktop/src-tauri/binaries/opencode-cli-${TRIPLE}"
               ;;
             *) echo "unsupported runner"; exit 1 ;;
           esac
