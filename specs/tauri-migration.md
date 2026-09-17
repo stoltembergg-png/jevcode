@@ -340,6 +340,43 @@ Follow-up implemented during P0 (see `packages/opencode`):
   `script/build.ts` together with a Bun-version mismatch warning. Verified
   locally against the compiled Windows binary (PASS).
 
+## P1 results
+
+The Tauri shell now runs the real UI on Windows (validated on this machine):
+
+- `packages/desktop/src-tauri`: window (frameless), sidecar bootstrap (`externalBin`),
+  health poll, `await_initialization`, store commands matching the Electron on-disk
+  shape, single-instance, deep-link forwarding, and page-load diagnostics.
+- `packages/desktop/src/renderer/tauri-api.ts`: the `window.api` shim over
+  `invoke`/`listen`; it installs itself only when the Electron preload is absent, so
+  `createPlatform()` and `packages/app` stay untouched.
+- `packages/desktop/vite.tauri.config.ts` builds the renderer to
+  `src-tauri/web-dist`; `scripts/predev-tauri.ts` stages the sidecar and builds the
+  renderer on demand.
+- `tauri.conf.json` uses a separate dev identifier (`ai.opencode.desktop.v2.dev`) and
+  declares the `opencode` deep-link scheme.
+
+Verified end to end: the UI boots and connects to the local server (confirmed
+visually), the renderer's boot store traffic flows through the Rust store
+(`opencode.global.dat`, per-window tabs, settings), closing the window kills the
+sidecar, a second launch is forwarded to the running instance with its argv, and the
+deep link reaches the shim (`deep-link received [...]`) and is re-dispatched as the
+app's `opencode:deep-link` event.
+
+Notes and follow-ups:
+
+- Tauri does not propagate `document.title` changes to the native window title, so
+  the title is not usable as a status channel (the page-load eval is).
+- Favicons under `packages/app/public` are git symlinks; this Windows checkout
+  materializes them as tiny text files (`core.symlinks=false`). Cosmetic locally.
+- Temporary diagnostics (`[store]` logging, the page-load eval, shim event logging)
+  must be gated behind a dev flag before P4.
+- The deep link's *UI effect* (opening a project) was not visually distinguishable
+  because that project was already active; re-verify during the P2 QA pass.
+- P2 still to port: native pickers with attachment tokens, menus + native i18n,
+  updater, logs/export, recovery dialog, drafts sqlite, opener, window state,
+  titlebar theme/background color, zoom event sync.
+
 ## Cross-cutting tasks
 
 - **Bridge contract test**: assert that every method on the `window.api` shim has a

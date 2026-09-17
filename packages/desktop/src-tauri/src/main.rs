@@ -295,6 +295,20 @@ fn main() {
   const invoke = (window.__TAURI_INTERNALS__ && window.__TAURI_INTERNALS__.invoke) ||
     (window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.invoke);
   if (!invoke) { console.error("no invoke bridge", report); return }
+  // Independent listener so shell-side events can be observed outside the app shim.
+  try {
+    const listen = window.__TAURI__ && window.__TAURI__.event && window.__TAURI__.event.listen;
+    if (listen) {
+      await listen("deep-link", (event) => {
+        invoke("log_stub", { message: "page-listener deep-link " + JSON.stringify(event.payload) });
+      });
+      report.listener = "installed";
+    } else {
+      report.listener = "unavailable";
+    }
+  } catch (error) {
+    report.listener = "failed: " + String(error);
+  }
   try {
     await invoke("log_stub", { message: "eval " + JSON.stringify(report) });
   } catch (error) {
@@ -332,7 +346,10 @@ fn main() {
                 let urls: Vec<String> = event.urls().into_iter().map(|url| url.to_string()).collect();
                 println!("[shell] deep link: {urls:?}");
                 *emitter.state::<ShellState>().pending_deep_links.lock().unwrap() = urls.clone();
-                let _ = emitter.emit("deep-link", urls);
+                match emitter.emit("deep-link", urls) {
+                    Ok(()) => println!("[shell] deep-link emitted"),
+                    Err(error) => println!("[shell] deep-link emit failed: {error}"),
+                }
             });
 
             let sidecar_app = handle.clone();

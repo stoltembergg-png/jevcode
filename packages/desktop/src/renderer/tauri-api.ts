@@ -25,7 +25,11 @@ const storeLength = (name: string) => invoke<number>("store_length", { name })
 
 const subscribe = <T>(event: string, callback: (payload: T) => void) => {
   let unlisten: (() => void) | undefined
-  void listen<T>(event, (message) => callback(message.payload)).then((fn) => (unlisten = fn))
+  listen<T>(event, (message) => callback(message.payload))
+    .then((fn) => (unlisten = fn))
+    .catch((error) => {
+      void invoke<void>("log_stub", { message: `listen failed for ${event}: ${String(error)}` }).catch(() => {})
+    })
   return () => unlisten?.()
 }
 
@@ -47,7 +51,11 @@ const tauriApi = {
   },
 
   consumeInitialDeepLinks: () => invoke<string[]>("consume_initial_deep_links"),
-  onDeepLink: (callback: (urls: string[]) => void) => subscribe<string[]>("deep-link", callback),
+  onDeepLink: (callback: (urls: string[]) => void) =>
+    subscribe<string[]>("deep-link", (urls) => {
+      void invoke<void>("log_stub", { message: `deep-link received ${JSON.stringify(urls)}` }).catch(() => {})
+      callback(urls)
+    }),
 
   getDefaultServerUrl: () => storeGet(SETTINGS_STORE, DEFAULT_SERVER_URL_KEY),
   setDefaultServerUrl: (url: string | null) =>
