@@ -15,6 +15,17 @@ const generated = await import("./generate.ts")
 
 import { Script } from "@opencode-ai/script"
 import pkg from "../package.json"
+import { smokeServer } from "./smoke-server"
+
+// The single-file binary is only known-good on the Bun version pinned in the root
+// `packageManager`; other versions can bundle but fail at server startup/runtime,
+// which the server + PTY smoke test below is meant to catch.
+const expectedBun = (await Bun.file(path.join(dir, "../../package.json")).json()).packageManager
+if (typeof expectedBun === "string" && expectedBun.startsWith("bun@") && Bun.version !== expectedBun.slice(4)) {
+  console.warn(
+    `Warning: Bun ${Bun.version} differs from the pinned ${expectedBun}; the bundled binary may break at runtime (server + PTY smoke test is the gate).`,
+  )
+}
 
 const singleFlag = process.argv.includes("--single")
 const baselineFlag = process.argv.includes("--baseline")
@@ -208,6 +219,8 @@ for (const item of targets) {
     try {
       const versionOutput = await $`${binaryPath} --version`.text()
       console.log(`Smoke test passed: ${versionOutput.trim()}`)
+      console.log("Running server + PTY smoke test")
+      await smokeServer(binaryPath)
     } catch (e) {
       console.error(`Smoke test failed for ${name}:`, e)
       process.exit(1)
