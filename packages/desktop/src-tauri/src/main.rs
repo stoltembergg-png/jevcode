@@ -267,14 +267,13 @@ fn main() {
         // Must be registered before the deep-link plugin so second launches are
         // forwarded into the running instance instead of spawning a new process.
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            // The single-instance plugin carries the deep-link feature, so URLs in
+            // argv are forwarded to the deep-link plugin's on_open_url handler.
+            println!("[shell] second instance: {argv:?}");
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.unminimize();
                 let _ = window.show();
                 let _ = window.set_focus();
-            }
-            let urls: Vec<String> = argv.into_iter().filter(|arg| arg.starts_with("opencode://")).collect();
-            if !urls.is_empty() {
-                let _ = app.emit("deep-link", urls);
             }
         }))
         .plugin(tauri_plugin_shell::init())
@@ -331,6 +330,7 @@ fn main() {
             let emitter = handle.clone();
             let _ = handle.deep_link().on_open_url(move |event| {
                 let urls: Vec<String> = event.urls().into_iter().map(|url| url.to_string()).collect();
+                println!("[shell] deep link: {urls:?}");
                 *emitter.state::<ShellState>().pending_deep_links.lock().unwrap() = urls.clone();
                 let _ = emitter.emit("deep-link", urls);
             });

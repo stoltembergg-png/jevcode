@@ -28,5 +28,12 @@
     "active": false,
     "icon": ["icons/icon.png", "icons/icon.ico"],
     "externalBin": ["binaries/opencode-cli"]
+  },
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["opencode"]
+      }
+    }
   }
 }
