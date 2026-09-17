@@ -433,7 +433,7 @@ killing the sidecar produced `sidecar terminated` → `restarting sidecar (attem
 `server ready` on the same port; window state round-tripped for normal
 (`1200x800 at 1230,90`) and maximized (`2560x1032 at -8,-8, maximized=true`) windows.
 
-### Slice 3 — native menu + native i18n — PASS on Windows; macOS application pending
+### Slice 3 — native menu + native i18n — PASS (Windows + macOS)
 
 - `set_native_translations` stores the renderer's typed bundle (locale + messages) and
   resolves labels through a `native_t` equivalent of `native-translations.ts`. The file
@@ -452,6 +452,18 @@ killing the sidecar produced `sidecar terminated` → `restarting sidecar (attem
   `[menu] spec received: 7 submenu(s)`,
   `[menu] built 55 item(s) (not applied on this platform)`. The real macOS menu bar is
   compile-verified only — add it to the macOS QA checklist for CI/human validation.
+
+macOS validation (CI run 35274975002, `.github/workflows/tauri-shell-macos.yml`): the real
+shell ran on a macOS runner and its `run.log` shows `[i18n] bundle received locale=en
+keys=90`, `[menu] spec received: 7 submenu(s)`, `[menu] applied 55 item(s)`, `server ready`,
+renderer store traffic and the drafts self-test — all assertions green. Two notes from
+that run:
+
+- the picker self-test uses Windows paths/expectations, so on macOS it reports
+  `{appExists:false, appPath:"cmd", revealed:false}` (platform-correct, not a regression);
+  make the self-test platform-aware if it is kept long term;
+- the sidecar logs `background dependency install failed ... @opencode-ai/plugin@0.0.0-<branch>-...`,
+  which is expected for branch builds whose version is not published to npm.
 
 Dev-loop gotcha (cost real debugging time, worth knowing): **Tauri embeds `frontendDist`
 into the binary at compile time.** After changing anything under `src/renderer`, run
