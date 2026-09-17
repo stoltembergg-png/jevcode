@@ -299,6 +299,11 @@ Operational note found during the Windows probe:
   `PermissionDenied`, so the next build breaks. Run probes non-elevated and keep
   the sidecar hardening (PID registry, stdin-EOF shutdown, job objects) in the
   real shell.
+- Repeated "spawn sidecar" presses on the same port leak a process: the newer
+  child fails to bind and exits while the earlier one stays alive, and a single
+  "last pid wins" field makes the cleanup kill the wrong (already dead) pid.
+  Kill every spawned pid and re-check death by pid. This is a concrete instance
+  of the documented `CommandChild::kill()` weakness.
 
 Follow-up implemented during P0 (see `packages/opencode`):
 
