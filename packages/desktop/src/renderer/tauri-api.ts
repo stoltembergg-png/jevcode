@@ -161,7 +161,8 @@ const tauriApi = {
 
   getWindowFocused: () => getCurrentWindow().isFocused(),
   getWindowFullscreen: () => getCurrentWindow().isFullscreen(),
-  onWindowFullscreenChanged: (_callback: (fullscreen: boolean) => void) => () => {},
+  onWindowFullscreenChanged: (callback: (fullscreen: boolean) => void) =>
+    subscribe<boolean>("window-fullscreen-changed", callback),
   setWindowFocus: () => getCurrentWindow().setFocus(),
   showWindow: () => getCurrentWindow().show(),
   relaunch: () => {
@@ -174,11 +175,11 @@ const tauriApi = {
   setPinchZoomEnabled: (enabled: boolean) =>
     storeSet(SETTINGS_STORE, PINCH_ZOOM_ENABLED_KEY, enabled ? "true" : "false"),
   onPinchZoomEnabledChanged: (_callback: (enabled: boolean) => void) => () => {},
-  onZoomFactorChanged: (_callback: (factor: number) => void) => () => {},
+  onZoomFactorChanged: (callback: (factor: number) => void) => subscribe<number>("zoom-factor-changed", callback),
 
   setTitlebar: async () => {},
   runDesktopMenuAction: async () => {},
-  setBackgroundColor: async () => {},
+  setBackgroundColor: (color: string) => getCurrentWindow().setBackgroundColor(color),
   exportDebugLogs: async () => "",
   setForceFocus: async () => {},
   recordFatalRendererError: (error: unknown) =>

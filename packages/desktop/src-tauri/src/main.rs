@@ -44,6 +44,7 @@ struct ShellState {
     endpoint: Mutex<Option<Endpoint>>,
     stopping: Mutex<bool>,
     zoom: Mutex<f64>,
+    fullscreen: Mutex<bool>,
 }
 
 fn free_port() -> Result<u16, String> {
@@ -307,9 +308,10 @@ fn log_stub(message: String) {
 }
 
 #[tauri::command]
-fn set_zoom(state: State<'_, ShellState>, window: tauri::WebviewWindow, factor: f64) -> Result<(), String> {
+fn set_zoom(app: AppHandle, state: State<'_, ShellState>, window: tauri::WebviewWindow, factor: f64) -> Result<(), String> {
     window.set_zoom(factor).map_err(|error| error.to_string())?;
     *state.zoom.lock().unwrap() = factor;
+    let _ = app.emit("zoom-factor-changed", factor);
     Ok(())
 }
 
@@ -1190,6 +1192,7 @@ fn run_menu_action(app: &AppHandle, action: &str) {
             if let Some(window) = &window {
                 if window.set_zoom(next).is_ok() {
                     *state.zoom.lock().unwrap() = next;
+                    let _ = app.emit("zoom-factor-changed", next);
                 }
             }
         }
@@ -1267,6 +1270,7 @@ fn main() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_decorum::init())
         .plugin(tauri_plugin_deep_link::init())
         .manage(ShellState::default())
         .manage(PickedFiles::default())
@@ -1294,7 +1298,7 @@ fn main() {
             println!("[page] {:?} {}", payload.event(), payload.url());
             if let tauri::webview::PageLoadEvent::Finished = payload.event() {
                 let _ = webview.eval(
-                    r#"(async () => {
+                    r##"(async () => {
   const report = {
     hasGlobal: !!window.__TAURI__,
     hasInternals: !!window.__TAURI_INTERNALS__,
@@ -1332,6 +1336,16 @@ fn main() {
   } catch (error) {
     await invoke("log_stub", { message: "shell self-test failed " + String(error) });
   }
+  // Temporary self-test for the Windows overlay titlebar and window background.
+  try {
+    const decorumButtons = document.querySelectorAll(
+      '#decorum-tb-minimize, #decorum-tb-maximize, #decorum-tb-close, .decorum-tb-btn',
+    ).length;
+    await window.api.setBackgroundColor('#101418');
+    await invoke("log_stub", { message: "titlebar self-test " + JSON.stringify({ decorumButtons, background: "ok" }) });
+  } catch (error) {
+    await invoke("log_stub", { message: "titlebar self-test failed " + String(error) });
+  }
   // Temporary self-test for the updater slice.
   try {
     const state = await window.api.updater.check();
@@ -1361,7 +1375,7 @@ fn main() {
   } catch (error) {
     await invoke("log_stub", { message: "draft self-test failed " + String(error) });
   }
-})()"#,
+})()"##,
                 );
             }
         })
@@ -1415,6 +1429,16 @@ fn main() {
 
             restore_window_state(&handle);
 
+            // Windows parity with Electron's `titleBarOverlay`: decorum draws the
+            // native-style caption controls into `[data-tauri-decorum-tb]`.
+            #[cfg(windows)]
+            {
+                use tauri_plugin_decorum::WebviewWindowExt;
+                if let Some(window) = handle.get_webview_window("main") {
+                    let _ = window.create_overlay_titlebar();
+                }
+            }
+
             // Deep links: queue whatever launched the app, then forward new ones.
             if let Ok(Some(urls)) = handle.deep_link().get_current() {
                 let urls: Vec<String> = urls.into_iter().map(|url| url.to_string()).collect();
@@ -1441,8 +1465,22 @@ fn main() {
             // The window still exists here, unlike `Exit` (where it is already gone).
             tauri::RunEvent::WindowEvent { label, event, .. } => {
                 if label == "main" {
-                    if let tauri::WindowEvent::CloseRequested { .. } = event {
-                        save_window_state(app);
+                    match event {
+                        tauri::WindowEvent::CloseRequested { .. } => save_window_state(app),
+                        tauri::WindowEvent::Resized(_) | tauri::WindowEvent::Focused(_) => {
+                            // OS-driven fullscreen changes (green button, snap) reach the
+                            // renderer through the same event the Electron shell used.
+                            if let Some(window) = app.get_webview_window("main") {
+                                let current = window.is_fullscreen().unwrap_or(false);
+                                let state = app.state::<ShellState>();
+                                let mut last = state.fullscreen.lock().unwrap();
+                                if *last != current {
+                                    *last = current;
+                                    let _ = app.emit("window-fullscreen-changed", current);
+                                }
+                            }
+                        }
+                        _ => {}
                     }
                 }
             }

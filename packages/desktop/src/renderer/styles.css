@@ -1,0 +1,9 @@
+/* Matches the historic Tauri shell: the overlay titlebar controls (Windows) keep the
+   same 40px height as the app titlebar. */
+button.decorum-tb-btn,
+button#decorum-tb-minimize,
+button#decorum-tb-maximize,
+button#decorum-tb-close,
+div[data-tauri-decorum-tb] {
+  height: calc(var(--spacing) * 10) !important;
+}

@@ -23,6 +23,7 @@ rusqlite = { version = "0.40.2", features = ["bundled"] }
 sha2 = "0.11.0"
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
+tauri-plugin-decorum = "1.1.1"
 
 [[bin]]
 name = "opencode-desktop"

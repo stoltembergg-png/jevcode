@@ -510,6 +510,25 @@ must run where the password is available.
   secrets, and `pull_request_target` must never be combined with checking out untrusted
   code.
 
+### Slice 4 — titlebar overlay, window background, event sync — PASS (automated checks)
+
+- **Windows caption controls**: `tauri-plugin-decorum` 1.1.1 with
+  `create_overlay_titlebar()` draws native-style minimize/maximize/close controls into
+  `[data-tauri-decorum-tb]` (marker in `src/renderer/index.html`, 40px height rule in
+  `src/renderer/styles.css`), matching Electron's `titleBarOverlay`. Verified in-page:
+  `titlebar self-test {"decorumButtons":3,"background":"ok"}`.
+- **Window background**: `setBackgroundColor` now calls `Window.setBackgroundColor`; the UI
+  already pushes the theme background on every change.
+- **Event sync**: shell-driven zoom changes (menu actions, macOS menu items) emit
+  `zoom-factor-changed`, and OS-driven fullscreen changes emit
+  `window-fullscreen-changed`; both feed the renderer modules that already existed
+  (`webview-zoom.ts`, `window-fullscreen.ts`). Menu commands still forward to the renderer
+  as `menu-command`, while `run_menu_action` covers reload, devtools, zoom, fullscreen,
+  window operations, edit operations and relaunch.
+- Deliberately deferred to P4: a shell log file (`tauri-plugin-log` replacing
+  electron-log) and therefore a real `exportDebugLogs`. The UI's export action currently
+  resolves without producing an archive; P4 adds the log pipeline and the zip.
+
 ## Cross-cutting tasks
 
 - **Bridge contract test**: assert that every method on the `window.api` shim has a
