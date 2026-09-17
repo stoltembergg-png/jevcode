@@ -1,0 +1,220 @@
+name: tauri-release
+
+# Builds the Tauri desktop bundle and (optionally) publishes a GitHub release with
+# updater artifacts. Everything signing-related degrades gracefully: without the
+# secrets the workflow still produces unsigned installers, and signing switches on
+# by itself once the credentials exist (see specs/tauri-migration.md, "P4 prerequisites").
+#
+# Secret names (all optional):
+#   Updater:  TAURI_SIGNING_PRIVATE_KEY, TAURI_SIGNING_PRIVATE_KEY_PASSWORD
+#   Windows:  AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_TENANT_ID,
+#             AZURE_TRUSTED_SIGNING_ENDPOINT, AZURE_TRUSTED_SIGNING_ACCOUNT_NAME,
+#             AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE
+#   macOS:    APPLE_CERTIFICATE (base64 p12), APPLE_CERTIFICATE_PASSWORD,
+#             APPLE_SIGNING_IDENTITY, APPLE_API_ISSUER, APPLE_API_KEY,
+#             APPLE_API_KEY_CONTENTS (contents of the .p8)
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to build (e.g. 0.1.0). Defaults to 0.0.0."
+        required: false
+        default: "0.0.0"
+      publish:
+        description: "Publish a GitHub release with the built artifacts"
+        type: boolean
+        default: false
+  push:
+    tags: ["v*"]
+
+concurrency:
+  group: tauri-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-latest
+            bundles: nsis
+          - platform: macos-latest
+            bundles: app,dmg
+    runs-on: ${{ matrix.platform }}
+    timeout-minutes: 120
+    permissions:
+      contents: write
+    env:
+      HAS_UPDATER_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' }}
+      HAS_AZURE: ${{ secrets.AZURE_TRUSTED_SIGNING_ACCOUNT_NAME != '' }}
+      HAS_APPLE: ${{ secrets.APPLE_CERTIFICATE != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/setup-bun
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: packages/desktop/src-tauri
+
+      - name: Build the opencode sidecar
+        working-directory: packages/opencode
+        run: bun run build --single --skip-embed-web-ui
+
+      - name: Stage the sidecar for externalBin
+        shell: bash
+        run: |
+          set -euo pipefail
+          TRIPLE=$(rustc -vV | sed -n 's/^host: //p')
+          mkdir -p packages/desktop/src-tauri/binaries
+          case "$RUNNER_OS" in
+            Windows)
+              cp packages/opencode/dist/opencode-windows-x64/bin/opencode.exe \
+                 "packages/desktop/src-tauri/binaries/opencode-cli-${TRIPLE}.exe"
+              ;;
+            macOS)
+              case "$(uname -m)" in
+                arm64) PLATFORM=opencode-darwin-arm64 ;;
+                x86_64) PLATFORM=opencode-darwin-x64 ;;
+                *) echo "unsupported arch"; exit 1 ;;
+              esac
+              cp "packages/opencode/dist/${PLATFORM}/bin/opencode" \
+                 "packages/desktop/src-tauri/binaries/opencode-cli-${TRIPLE}"
+              ;;
+            *) echo "unsupported runner"; exit 1 ;;
+          esac
+          ls -l packages/desktop/src-tauri/binaries
+
+      - name: Build the renderer
+        working-directory: packages/desktop
+        run: bun run build:renderer-tauri
+
+      - name: Install the Azure signing CLI (Windows, when credentials exist)
+        if: env.HAS_AZURE == 'true' && matrix.platform == 'windows-latest'
+        run: cargo install artifact-signing-cli --locked
+
+      - name: Import the Apple certificate (macOS, when credentials exist)
+        if: env.HAS_APPLE == 'true' && matrix.platform == 'macos-latest'
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          KEYCHAIN="$RUNNER_TEMP/app-signing.keychain-db"
+          echo "$APPLE_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p actions "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p actions "$KEYCHAIN"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k actions "$KEYCHAIN"
+          security default-keychain -s "$KEYCHAIN"
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+
+      - name: Write the CI Tauri config
+        shell: bash
+        env:
+          VERSION: ${{ inputs.version || '0.0.0' }}
+        run: |
+          set -euo pipefail
+          node -e '
+            const fs = require("fs");
+            const version = process.env.VERSION;
+            const createUpdaterArtifacts = process.env.HAS_UPDATER_KEY === "true";
+            const config = { version, bundle: { createUpdaterArtifacts } };
+            const azureReady = process.env.HAS_AZURE === "true" && process.env.RUNNER_OS === "Windows";
+            if (azureReady) {
+              const e = process.env.AZURE_TRUSTED_SIGNING_ENDPOINT;
+              const a = process.env.AZURE_TRUSTED_SIGNING_ACCOUNT_NAME;
+              const c = process.env.AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE;
+              config.bundle.windows = { signCommand: `artifact-signing-cli -e ${e} -a ${a} -c ${c} -d OpenCode %1` };
+            }
+            fs.writeFileSync("src-tauri/tauri.ci.conf.json", JSON.stringify(config, null, 2));
+            console.log(fs.readFileSync("src-tauri/tauri.ci.conf.json", "utf8"));
+          '
+        working-directory: packages/desktop
+
+      - name: Build the bundle
+        working-directory: packages/desktop
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_TRUSTED_SIGNING_ENDPOINT: ${{ secrets.AZURE_TRUSTED_SIGNING_ENDPOINT }}
+          AZURE_TRUSTED_SIGNING_ACCOUNT_NAME: ${{ secrets.AZURE_TRUSTED_SIGNING_ACCOUNT_NAME }}
+          AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE: ${{ secrets.AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_PATH: ${{ runner.temp }}/apple-api-key.p8
+          APPLE_API_KEY_CONTENTS: ${{ secrets.APPLE_API_KEY_CONTENTS }}
+        run: |
+          set -euo pipefail
+          if [ -n "${APPLE_API_KEY_CONTENTS:-}" ]; then
+            printf '%s' "$APPLE_API_KEY_CONTENTS" > "$APPLE_API_KEY_PATH"
+          fi
+          bun run tauri build --config src-tauri/tauri.ci.conf.json --bundles "${{ matrix.bundles }}"
+
+      - name: Collect artifacts and the updater fragment
+        shell: bash
+        env:
+          VERSION: ${{ inputs.version || '0.0.0' }}
+          TAG: ${{ github.ref_type == 'tag' && github.ref_name || format('v{0}', inputs.version || '0.0.0') }}
+        run: |
+          set -euo pipefail
+          BUNDLE="packages/desktop/src-tauri/target/release/bundle"
+          OUT="dist-release"
+          mkdir -p "$OUT"
+          find "$BUNDLE" -type f \( -name "*.exe" -o -name "*.dmg" -o -name "*.AppImage" -o -name "*.sig" \) -exec cp {} "$OUT/" \;
+          ls -l "$OUT"
+          PLATFORM_KEY=""
+          ARTIFACT=""
+          case "$RUNNER_OS" in
+            Windows) PLATFORM_KEY="windows-x86_64"; ARTIFACT=$(basename "$(ls "$OUT"/*setup.exe)") ;;
+            macOS) PLATFORM_KEY="darwin-aarch64"; ARTIFACT=$(basename "$(ls "$OUT"/*.dmg)") ;;
+          esac
+          if [ -f "$OUT/${ARTIFACT}.sig" ]; then
+            export VERSION PLATFORM_KEY
+            export URL="https://github.com/${{ github.repository }}/releases/download/$TAG/$ARTIFACT"
+            export SIG="$(cat "$OUT/${ARTIFACT}.sig")"
+            node -e '
+              const fs = require("fs");
+              const fragment = {
+                version: process.env.VERSION,
+                notes: "",
+                pub_date: new Date().toISOString(),
+                platforms: { [process.env.PLATFORM_KEY]: { url: process.env.URL, signature: process.env.SIG } },
+              };
+              const path = `dist-release/latest-fragment-${process.env.PLATFORM_KEY}.json`;
+              fs.writeFileSync(path, JSON.stringify(fragment, null, 2));
+              console.log(fs.readFileSync(path, "utf8"));
+            '
+          else
+            echo "no .sig produced (updater key missing): skipping the latest.json fragment"
+          fi
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-release-${{ matrix.platform }}
+          path: dist-release/
+          if-no-files-found: warn
+
+      - name: Publish to the GitHub release
+        if: (inputs.publish || github.ref_type == 'tag') && env.HAS_UPDATER_KEY == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_type == 'tag' && github.ref_name || format('v{0}', inputs.version || '0.0.0') }}
+        run: |
+          set -euo pipefail
+          gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1 || \
+            gh release create "$TAG" --repo "${{ github.repository }}" --title "$TAG" --notes "Tauri build $TAG"
+          gh release upload "$TAG" dist-release/* --clobber --repo "${{ github.repository }}"
