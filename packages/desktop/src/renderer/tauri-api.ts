@@ -132,7 +132,10 @@ const tauriApi = {
   setForceFocus: async () => {},
   recordFatalRendererError: (error: unknown) =>
     invoke<void>("log_stub", { message: `fatal-renderer-error ${JSON.stringify(error)}` }).catch(() => {}),
-  setNativeTranslations: async () => {},
+  setNativeTranslations: (bundle: unknown) =>
+    invoke<void>("set_native_translations", { bundle }).catch((error) => {
+      void invoke("log_stub", { message: `set_native_translations failed ${String(error)}` }).catch(() => {})
+    }),
 } as unknown as typeof window.api
 
 if (!window.api) window.api = tauriApi

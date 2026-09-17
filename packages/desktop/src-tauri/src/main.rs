@@ -43,6 +43,7 @@ struct ShellState {
     pending_deep_links: Mutex<Vec<String>>,
     endpoint: Mutex<Option<Endpoint>>,
     stopping: Mutex<bool>,
+    zoom: Mutex<f64>,
 }
 
 fn free_port() -> Result<u16, String> {
@@ -300,8 +301,10 @@ fn log_stub(message: String) {
 }
 
 #[tauri::command]
-fn set_zoom(window: tauri::WebviewWindow, factor: f64) -> Result<(), String> {
-    window.set_zoom(factor).map_err(|error| error.to_string())
+fn set_zoom(state: State<'_, ShellState>, window: tauri::WebviewWindow, factor: f64) -> Result<(), String> {
+    window.set_zoom(factor).map_err(|error| error.to_string())?;
+    *state.zoom.lock().unwrap() = factor;
+    Ok(())
 }
 
 #[tauri::command]
@@ -429,9 +432,13 @@ async fn open_file_picker(
         builder = builder.set_directory(directory);
     }
     if let Some(extensions) = opts.extensions.filter(|list| !list.is_empty()) {
-        // TODO(i18n): the filter label should come from the native translations bundle.
         let refs: Vec<&str> = extensions.iter().map(|value| value.as_str()).collect();
-        builder = builder.add_filter("Files", &refs);
+        // The label comes from the native translations bundle; without it the filter
+        // is skipped rather than hardcoding English here (AGENTS.md).
+        let i18n = app.state::<NativeI18n>();
+        if let Some(label) = native_t(&i18n, "desktop.dialog.files", &[]) {
+            builder = builder.add_filter(label, &refs);
+        }
     }
     let mut selected: Vec<PathBuf> = builder
         .blocking_pick_files()
@@ -944,6 +951,297 @@ fn read_window_state_from(path: &std::path::Path) -> Option<WindowState> {
     serde_json::from_str(&text).ok()
 }
 
+// ---------------------------------------------------------------------------
+// Native translations and the macOS application menu
+//
+// Mirrors native-translations.ts and menu.ts: the renderer supplies a typed
+// message bundle plus the shared menu specification (both from
+// @opencode-ai/app); labels are resolved here with `native_t`, and menu clicks
+// either forward a renderer command (`menu-command`) or run a shell action.
+// ---------------------------------------------------------------------------
+
+#[derive(Default)]
+struct NativeI18n {
+    locale: Mutex<String>,
+    messages: Mutex<HashMap<String, String>>,
+    menu: Mutex<Vec<Value>>,
+}
+
+#[tauri::command]
+fn set_native_translations(
+    app: AppHandle,
+    state: State<'_, NativeI18n>,
+    bundle: Value,
+) -> Result<(), String> {
+    let locale = bundle.get("locale").and_then(Value::as_str).unwrap_or("en").to_string();
+    let messages = bundle
+        .get("messages")
+        .and_then(Value::as_object)
+        .map(|map| {
+            map.iter()
+                .filter_map(|(key, value)| value.as_str().map(|text| (key.clone(), text.to_string())))
+                .collect::<HashMap<String, String>>()
+        })
+        .unwrap_or_default();
+    println!("[i18n] bundle received locale={locale} keys={}", messages.len());
+    *state.locale.lock().unwrap() = locale;
+    *state.messages.lock().unwrap() = messages;
+    rebuild_native_menu(&app);
+    Ok(())
+}
+
+#[tauri::command]
+fn set_native_menu(app: AppHandle, state: State<'_, NativeI18n>, items: Vec<Value>) -> Result<(), String> {
+    println!("[menu] spec received: {} submenu(s)", items.len());
+    *state.menu.lock().unwrap() = items;
+    rebuild_native_menu(&app);
+    Ok(())
+}
+
+/// Mirrors formatDesktopNativeMessage: `{{name}}` placeholders.
+fn native_t(state: &NativeI18n, key: &str, params: &[(&str, String)]) -> Option<String> {
+    let messages = state.messages.lock().unwrap();
+    let template = messages.get(key)?;
+    let mut text = template.clone();
+    for (name, value) in params {
+        text = text.replace(&format!("{{{{{name}}}}}"), value);
+    }
+    Some(text)
+}
+
+fn menu_label(state: &NativeI18n, key: &str) -> String {
+    state
+        .messages
+        .lock()
+        .unwrap()
+        .get(key)
+        .cloned()
+        .unwrap_or_else(|| key.to_string())
+}
+
+/// Maps the app's mac-style accelerators to Tauri's parser tokens.
+fn parse_accelerator(input: &str) -> Option<String> {
+    let mut modifiers = Vec::new();
+    let mut key = None;
+    for token in input.split('+') {
+        match token {
+            "Cmd" | "Command" => modifiers.push("Command"),
+            "CmdOrCtrl" => modifiers.push("CmdOrCtrl"),
+            "Ctrl" | "Control" => modifiers.push("Control"),
+            "Option" | "Alt" => modifiers.push("Alt"),
+            "Shift" => modifiers.push("Shift"),
+            "" => {}
+            other => {
+                key = Some(match other {
+                    "S" | "s" => "KeyS",
+                    "O" | "o" => "KeyO",
+                    "N" | "n" => "KeyN",
+                    "0" => "Digit0",
+                    "+" | "=" => "Equal",
+                    "-" => "Minus",
+                    "," => "Comma",
+                    "`" => "Backquote",
+                    "[" => "BracketLeft",
+                    "]" => "BracketRight",
+                    "Up" => "ArrowUp",
+                    "Down" => "ArrowDown",
+                    _ => return None,
+                })
+            }
+        }
+    }
+    let key = key?;
+    let mut parts = modifiers;
+    parts.push(key);
+    Some(parts.join("+"))
+}
+
+fn predefined_item(app: &AppHandle, role: &str) -> Option<tauri::menu::PredefinedMenuItem<tauri::Wry>> {
+    use tauri::menu::PredefinedMenuItem;
+    match role {
+        "about" => PredefinedMenuItem::about(app, None, None).ok(),
+        "hide" => PredefinedMenuItem::hide(app, None).ok(),
+        "hideOthers" => PredefinedMenuItem::hide_others(app, None).ok(),
+        "unhide" => PredefinedMenuItem::show_all(app, None).ok(),
+        "quit" => PredefinedMenuItem::quit(app, None).ok(),
+        "close" => PredefinedMenuItem::close_window(app, None).ok(),
+        "minimize" => PredefinedMenuItem::minimize(app, None).ok(),
+        "undo" => PredefinedMenuItem::undo(app, None).ok(),
+        "redo" => PredefinedMenuItem::redo(app, None).ok(),
+        "cut" => PredefinedMenuItem::cut(app, None).ok(),
+        "copy" => PredefinedMenuItem::copy(app, None).ok(),
+        "paste" => PredefinedMenuItem::paste(app, None).ok(),
+        "selectAll" => PredefinedMenuItem::select_all(app, None).ok(),
+        "togglefullscreen" => PredefinedMenuItem::fullscreen(app, None).ok(),
+        _ => None,
+    }
+}
+
+fn rebuild_native_menu(app: &AppHandle) {
+    let state = app.state::<NativeI18n>();
+    let spec = state.menu.lock().unwrap().clone();
+    if spec.is_empty() {
+        return;
+    }
+
+    let mut builder = tauri::menu::MenuBuilder::new(app);
+    let mut count = 0usize;
+    for submenu in &spec {
+        let label = submenu
+            .get("labelKey")
+            .and_then(Value::as_str)
+            .map(|key| menu_label(&state, key))
+            .unwrap_or_default();
+        let mut built = tauri::menu::SubmenuBuilder::new(app, label);
+        if let Some(entries) = submenu.get("items").and_then(Value::as_array) {
+            for entry in entries {
+                if entry.get("type").and_then(Value::as_str) == Some("separator") {
+                    if let Ok(item) = tauri::menu::PredefinedMenuItem::separator(app) {
+                        built = built.item(&item);
+                        count += 1;
+                    }
+                    continue;
+                }
+                let label_key = entry.get("labelKey").and_then(Value::as_str);
+                let label = label_key.map(|key| menu_label(&state, key)).unwrap_or_default();
+                if let Some(role) = entry.get("role").and_then(Value::as_str) {
+                    if let Some(item) = predefined_item(app, role) {
+                        built = built.item(&item);
+                        count += 1;
+                        continue;
+                    }
+                }
+                let id = entry
+                    .get("command")
+                    .and_then(Value::as_str)
+                    .map(|command| format!("cmd:{command}"))
+                    .or_else(|| entry.get("action").and_then(Value::as_str).map(|action| format!("act:{action}")))
+                    .or_else(|| entry.get("href").and_then(Value::as_str).map(|href| format!("href:{href}")));
+                let Some(id) = id else { continue };
+                let mut item = tauri::menu::MenuItemBuilder::with_id(id, label);
+                if let Some(accelerator) = entry
+                    .get("accelerator")
+                    .and_then(|value| value.get("macos"))
+                    .and_then(Value::as_str)
+                    .and_then(parse_accelerator)
+                {
+                    item = item.accelerator(accelerator);
+                }
+                if let Ok(item) = item.build(app) {
+                    built = built.item(&item);
+                    count += 1;
+                }
+            }
+        }
+        if let Ok(submenu) = built.build() {
+            builder = builder.item(&submenu);
+        }
+    }
+
+    match builder.build() {
+        Ok(menu) => {
+            if cfg!(target_os = "macos") {
+                match app.set_menu(menu) {
+                    Ok(_) => println!("[menu] applied {count} item(s)"),
+                    Err(error) => eprintln!("[menu] failed to apply: {error}"),
+                }
+            } else {
+                // Matches Electron: no native application menu outside macOS.
+                println!("[menu] built {count} item(s) (not applied on this platform)");
+            }
+        }
+        Err(error) => eprintln!("[menu] failed to build: {error}"),
+    }
+}
+
+/// Mirrors desktop-menu-actions.ts (shell-side actions only; commands go to the renderer).
+fn run_menu_action(app: &AppHandle, action: &str) {
+    let window = app.get_webview_window("main");
+    let clamp = |value: f64| value.clamp(0.2, 10.0);
+    let state = app.state::<ShellState>();
+    let current_zoom = *state.zoom.lock().unwrap();
+    match action {
+        "view.reload" => {
+            if let Some(window) = &window {
+                let _ = window.reload();
+            }
+        }
+        "view.toggleDevTools" => {
+            if let Some(window) = &window {
+                if window.is_devtools_open() {
+                    window.close_devtools();
+                } else {
+                    window.open_devtools();
+                }
+            }
+        }
+        "view.resetZoom" | "view.zoomIn" | "view.zoomOut" => {
+            let next = match action {
+                "view.resetZoom" => 1.0,
+                "view.zoomIn" => clamp(current_zoom + 0.2),
+                _ => clamp(current_zoom - 0.2),
+            };
+            if let Some(window) = &window {
+                if window.set_zoom(next).is_ok() {
+                    *state.zoom.lock().unwrap() = next;
+                }
+            }
+        }
+        "view.toggleFullscreen" => {
+            if let Some(window) = &window {
+                let _ = window.set_fullscreen(!window.is_fullscreen().unwrap_or(false));
+            }
+        }
+        "window.minimize" => {
+            if let Some(window) = &window {
+                let _ = window.minimize();
+            }
+        }
+        "window.toggleMaximize" => {
+            if let Some(window) = &window {
+                if window.is_maximized().unwrap_or(false) {
+                    let _ = window.unmaximize();
+                } else {
+                    let _ = window.maximize();
+                }
+            }
+        }
+        "window.close" => {
+            if let Some(window) = &window {
+                let _ = window.close();
+            }
+        }
+        "window.new" => println!("[menu] window.new is not supported yet"),
+        "app.checkForUpdates" => println!("[menu] updater is not wired yet"),
+        "app.relaunch" => {
+            *state.stopping.lock().unwrap() = true;
+            if let Some(child) = state.child.lock().unwrap().take() {
+                let _ = child.kill();
+            }
+            if let Ok(exe) = std::env::current_exe() {
+                let _ = std::process::Command::new(exe).spawn();
+            }
+            app.exit(0);
+        }
+        other if other.starts_with("edit.") => {
+            if let Some(window) = &window {
+                let command = match other {
+                    "edit.undo" => "undo",
+                    "edit.redo" => "redo",
+                    "edit.cut" => "cut",
+                    "edit.copy" => "copy",
+                    "edit.paste" => "paste",
+                    "edit.delete" => "delete",
+                    "edit.selectAll" => "selectAll",
+                    _ => return,
+                };
+                let _ = window.eval(format!("document.execCommand('{command}')"));
+            }
+        }
+        other => println!("[menu] unhandled action {other}"),
+    }
+}
+
 fn main() {
     tauri::Builder::default()
         // Must be registered before the deep-link plugin so second launches are
@@ -964,6 +1262,20 @@ fn main() {
         .plugin(tauri_plugin_deep_link::init())
         .manage(ShellState::default())
         .manage(PickedFiles::default())
+        .manage(NativeI18n::default())
+        .on_menu_event(|app, event| {
+            let id = event.id().0.as_str();
+            match id.split_once(':') {
+                Some(("cmd", command)) => {
+                    let _ = app.emit("menu-command", command.to_string());
+                }
+                Some(("act", action)) => run_menu_action(app, action),
+                Some(("href", href)) => {
+                    let _ = app.opener().open_url(href.to_string(), None::<String>);
+                }
+                _ => {}
+            }
+        })
         // Diagnostics for the bootstrap phase: log page loads and, once the page is
         // finished, evaluate a probe script that reports what the webview can see.
         .on_page_load(|webview, payload| {
@@ -1007,6 +1319,14 @@ fn main() {
     await invoke("log_stub", { message: "shell self-test " + JSON.stringify({ appExists, appPath, revealed }) });
   } catch (error) {
     await invoke("log_stub", { message: "shell self-test failed " + String(error) });
+  }
+  // Temporary self-test for the native i18n/menu commands.
+  try {
+    await invoke("set_native_translations", { bundle: { locale: "en", messages: { "desktop.dialog.files": "Files" } } });
+    await invoke("set_native_menu", { items: [] });
+    await invoke("log_stub", { message: "i18n/menu commands ok" });
+  } catch (error) {
+    await invoke("log_stub", { message: "i18n/menu commands failed " + String(error) });
   }
   // Temporary self-test for the drafts slice (sqlite + blobs).
   try {
@@ -1055,7 +1375,9 @@ fn main() {
             draft_delete,
             draft_blob_put,
             draft_blob_has,
-            draft_blob_get
+            draft_blob_get,
+            set_native_translations,
+            set_native_menu
         ])
         .setup(|app| {
             let handle = app.handle().clone();

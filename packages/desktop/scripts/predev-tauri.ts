@@ -43,6 +43,10 @@ console.log(`sidecar staged: ${dest}`)
 // `frontendDist` points at src-tauri/web-dist, which must exist before Tauri
 // compiles. Build the renderer on demand so a plain `cargo build` never fails on
 // a missing path.
+//
+// NOTE: Tauri embeds the frontend assets into the binary at compile time, so after
+// changing anything under src/renderer you must run `cargo build` again (or use
+// `tauri dev`, which rebuilds for you). Rebuilding only the renderer has no effect.
 if (!existsSync(path.join(desktop, "src-tauri/web-dist/index.html"))) {
   console.log("renderer assets missing: building with vite.tauri.config.ts")
   const built = await $`bun x vite build --config vite.tauri.config.ts`.cwd(desktop).nothrow()

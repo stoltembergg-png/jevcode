@@ -28,6 +28,7 @@ import { render } from "solid-js/web"
 import pkg from "../../package.json"
 import { t } from "./i18n"
 import { initializationData } from "./initialization"
+import { syncNativeMenu } from "./native-menu"
 import { DesktopFirstLaunchOnboarding } from "./onboarding"
 import { resetZoom, setPinchZoomEnabled, webviewZoom, zoomIn, zoomOut } from "./webview-zoom"
 import { windowFullscreen } from "./window-fullscreen"
@@ -432,7 +433,10 @@ function DesktopRoot(props: { windowState: DesktopWindowState }) {
     <PlatformProvider value={platform}>
       <AppBaseProviders
         locale={locale.latest}
-        onNativeTranslations={(bundle) => void window.api.setNativeTranslations(bundle).catch(() => undefined)}
+        onNativeTranslations={(bundle) => {
+          void window.api.setNativeTranslations(bundle).catch(() => undefined)
+          syncNativeMenu()
+        }}
       >
         <Show when={true}>{(_) => <App />}</Show>
       </AppBaseProviders>

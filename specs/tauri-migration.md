@@ -429,6 +429,31 @@ killing the sidecar produced `sidecar terminated` → `restarting sidecar (attem
 `server ready` on the same port; window state round-tripped for normal
 (`1200x800 at 1230,90`) and maximized (`2560x1032 at -8,-8, maximized=true`) windows.
 
+### Slice 3 — native menu + native i18n — PASS on Windows; macOS application pending
+
+- `set_native_translations` stores the renderer's typed bundle (locale + messages) and
+  resolves labels through a `native_t` equivalent of `native-translations.ts`. The file
+  picker filter label now comes from the bundle (`desktop.dialog.files`); without the
+  bundle the filter is skipped rather than hardcoding English (AGENTS.md).
+- `set_native_menu` receives the shared menu specification, built in the renderer from
+  `@opencode-ai/app/desktop-menu` (macOS-visible entries only) and mirrored from
+  `src/main/menu.ts`: OS roles map to predefined items, `command` items forward
+  `menu-command` to the renderer, `action` items run shell-side (mirroring
+  `desktop-menu-actions.ts`) and `href` items go through the opener. Accelerators are
+  translated from the app's mac-style tokens; unsupported tokens drop the accelerator
+  instead of failing.
+- The menu is applied on macOS only (`app.set_menu`), matching Electron's macOS-only
+  native menu; on Windows the shell builds it and logs the item count without applying.
+- Verified on Windows: `[i18n] bundle received locale=br keys=90`,
+  `[menu] spec received: 7 submenu(s)`,
+  `[menu] built 55 item(s) (not applied on this platform)`. The real macOS menu bar is
+  compile-verified only — add it to the macOS QA checklist for CI/human validation.
+
+Dev-loop gotcha (cost real debugging time, worth knowing): **Tauri embeds `frontendDist`
+into the binary at compile time.** After changing anything under `src/renderer`, run
+`cargo build` again (or use `tauri dev`); rebuilding only the renderer changes nothing
+the running app can see.
+
 ## Cross-cutting tasks
 
 - **Bridge contract test**: assert that every method on the `window.api` shim has a
