@@ -1,0 +1,91 @@
+name: tauri-shell-macos
+
+# Runs the real Tauri shell on a macOS runner and asserts the shell-level
+# behaviour that Windows cannot validate: the native menu is applied, the
+# sidecar boots, native translations arrive and the renderer stores state.
+# See specs/tauri-migration.md (P2) and packages/desktop/src-tauri.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [tauri-shell]
+    paths:
+      - "packages/desktop/**"
+      - ".github/workflows/tauri-shell-macos.yml"
+
+concurrency:
+  group: tauri-shell-macos-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  shell:
+    runs-on: macos-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/setup-bun
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: packages/desktop/src-tauri
+
+      - name: Build the opencode sidecar for macOS
+        working-directory: packages/opencode
+        run: bun run build --single --skip-embed-web-ui
+
+      - name: Stage the sidecar for externalBin
+        run: |
+          set -euo pipefail
+          TRIPLE=$(rustc -vV | sed -n 's/^host: //p')
+          case "$(uname -m)" in
+            arm64) PLATFORM=opencode-darwin-arm64 ;;
+            x86_64) PLATFORM=opencode-darwin-x64 ;;
+            *) echo "unsupported arch $(uname -m)"; exit 1 ;;
+          esac
+          BIN="packages/opencode/dist/${PLATFORM}/bin/opencode"
+          test -f "$BIN"
+          mkdir -p packages/desktop/src-tauri/binaries
+          cp "$BIN" "packages/desktop/src-tauri/binaries/opencode-cli-${TRIPLE}"
+          ls -l packages/desktop/src-tauri/binaries
+
+      - name: Build the renderer
+        working-directory: packages/desktop
+        run: bun run build:renderer-tauri
+
+      - name: Build the shell
+        working-directory: packages/desktop/src-tauri
+        run: cargo build
+
+      - name: Run the shell and assert its behaviour
+        working-directory: packages/desktop/src-tauri
+        run: |
+          set -uo pipefail
+          ./target/debug/opencode-desktop > run.log 2>&1 &
+          PID=$!
+          sleep 35
+          kill "$PID" 2>/dev/null || true
+          sleep 3
+          echo "=== shell log (filtered) ==="
+          grep -E '^\[(shell|menu|i18n|store|sidecar|window)\]' run.log | head -80 || true
+          echo "=== assertions ==="
+          fail=0
+          grep -q "\[menu\] applied" run.log || { echo "FAIL: native menu was not applied"; fail=1; }
+          grep -q "\[i18n\] bundle received" run.log || { echo "FAIL: native translations did not arrive"; fail=1; }
+          grep -q "server ready" run.log || { echo "FAIL: sidecar server never became ready"; fail=1; }
+          grep -q "\[store\] get" run.log || { echo "FAIL: renderer did not exercise the store"; fail=1; }
+          grep -q "sidecar killed" run.log || { echo "WARN: sidecar kill on exit not observed"; }
+          echo "=== app data ==="
+          ls -la "$HOME/Library/Application Support/ai.opencode.desktop.v2.dev" 2>/dev/null || true
+          exit $fail
+
+      - name: Upload shell log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-shell-macos-log
+          path: |
+            packages/desktop/src-tauri/run.log
+          if-no-files-found: warn
