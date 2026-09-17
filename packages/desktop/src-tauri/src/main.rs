@@ -1330,7 +1330,7 @@ fn run_menu_action(app: &AppHandle, action: &str) {
 }
 
 fn main() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         // Must be registered before the deep-link plugin so second launches are
         // forwarded into the running instance instead of spawning a new process.
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
@@ -1348,8 +1348,15 @@ fn main() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .plugin(tauri_plugin_decorum::init())
-        .plugin(tauri_plugin_deep_link::init())
+        .plugin(tauri_plugin_deep_link::init());
+
+    // Decorum drives the Windows overlay caption controls. Its macOS/cocoa path
+    // dereferences a null pointer with a decorationless window, so it is Windows-only
+    // (macOS gets its traffic lights from the window config instead).
+    #[cfg(windows)]
+    let builder = builder.plugin(tauri_plugin_decorum::init());
+
+    builder
         .manage(ShellState::default())
         .manage(PickedFiles::default())
         .manage(NativeI18n::default())
