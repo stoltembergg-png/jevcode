@@ -555,7 +555,7 @@ stdin-EOF shutdown if the server supports it) stays open for P4.
 - **Release boot panic found and fixed**: the updater plugin refuses non-HTTPS endpoints
   in release builds (`The configured updater endpoint must use a secure protocol like
   https`) and the app panicked at startup. The base `tauri.conf.json` now points at the
-  GitHub releases feed (`https://github.com/stoltembergg-png/jevcode/releases/latest/download/latest.json`)
+  GitHub releases feed (`https://github.com/stoltembergg-png/NextCode/releases/latest/download/latest.json`)
   and the local feed moved to `tauri.dev.conf.json`
   (`dangerousInsecureTransportProtocol: true`), used explicitly for the local updater E2E.
 - Caption-control polish: the decorum hover overlay was a black tint (invisible on dark
