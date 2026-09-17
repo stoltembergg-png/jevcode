@@ -529,6 +529,18 @@ must run where the password is available.
   electron-log) and therefore a real `exportDebugLogs`. The UI's export action currently
   resolves without producing an archive; P4 adds the log pipeline and the zip.
 
+### Sidecar lifetime hardening — PASS (Windows)
+
+The spawned server is assigned to a Windows Job Object with
+`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` (`windows-sys` 0.59 with `Win32_Security` +
+`Win32_System_JobObjects`), so a hard kill of the shell (crash, Task Manager, CI
+teardown) also kills the server. Verified: `sidecar 19088 bound to a kill-on-close job
+object`, then `Stop-Process -Force` on the shell → the sidecar died and
+`target/debug/opencode-cli.exe` was released (before this, the orphaned server locked
+that copy and broke the next `cargo build`). macOS has no job-object equivalent, so a
+hard kill there can still orphan the server; a PID registry with a boot sweep (or
+stdin-EOF shutdown if the server supports it) stays open for P4.
+
 ## Cross-cutting tasks
 
 - **Bridge contract test**: assert that every method on the `window.api` shim has a

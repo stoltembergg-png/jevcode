@@ -45,7 +45,72 @@ struct ShellState {
     stopping: Mutex<bool>,
     zoom: Mutex<f64>,
     fullscreen: Mutex<bool>,
+    job: Mutex<Option<isize>>,
 }
+
+/// Binds the sidecar to a Job Object with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`, so a
+/// hard kill of the shell (crash, Task Manager, CI teardown) also kills the server
+/// instead of leaving an orphan that locks `target/debug/opencode-cli.exe`.
+#[cfg(windows)]
+fn bind_sidecar_to_job(pid: u32) -> Option<isize> {
+    use windows_sys::Win32::Foundation::{CloseHandle, FALSE, HANDLE};
+    use windows_sys::Win32::System::JobObjects::{
+        AssignProcessToJobObject, CreateJobObjectW, JobObjectExtendedLimitInformation, SetInformationJobObject,
+        JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+    };
+    use windows_sys::Win32::System::Threading::{OpenProcess, PROCESS_SET_QUOTA, PROCESS_TERMINATE};
+    unsafe {
+        let job = CreateJobObjectW(std::ptr::null(), std::ptr::null());
+        if job.is_null() {
+            eprintln!("[shell] job object: create failed");
+            return None;
+        }
+        let mut info: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = std::mem::zeroed();
+        info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+        if SetInformationJobObject(
+            job,
+            JobObjectExtendedLimitInformation,
+            &info as *const _ as *const core::ffi::c_void,
+            std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
+        ) == 0
+        {
+            CloseHandle(job);
+            eprintln!("[shell] job object: limit failed");
+            return None;
+        }
+        let process: HANDLE = OpenProcess(PROCESS_SET_QUOTA | PROCESS_TERMINATE, FALSE, pid);
+        if process.is_null() {
+            CloseHandle(job);
+            eprintln!("[shell] job object: OpenProcess failed");
+            return None;
+        }
+        let assigned = AssignProcessToJobObject(job, process);
+        CloseHandle(process);
+        if assigned == 0 {
+            CloseHandle(job);
+            eprintln!("[shell] job object: assign failed");
+            return None;
+        }
+        println!("[shell] sidecar {pid} bound to a kill-on-close job object");
+        Some(job as isize)
+    }
+}
+
+#[cfg(not(windows))]
+fn bind_sidecar_to_job(_pid: u32) -> Option<isize> {
+    None
+}
+
+#[cfg(windows)]
+fn close_job(handle: isize) {
+    use windows_sys::Win32::Foundation::CloseHandle;
+    unsafe {
+        CloseHandle(handle as *mut core::ffi::c_void);
+    }
+}
+
+#[cfg(not(windows))]
+fn close_job(_handle: isize) {}
 
 fn free_port() -> Result<u16, String> {
     let listener = TcpListener::bind("127.0.0.1:0").map_err(|e| format!("bind: {e}"))?;
@@ -140,8 +205,21 @@ fn spawn_sidecar(app: &AppHandle, endpoint: Endpoint, attempt: u32) {
             return;
         }
     };
-    println!("[shell] sidecar spawned pid={} port={}", child.pid(), endpoint.port);
+    let pid = child.pid();
+    println!("[shell] sidecar spawned pid={pid} port={}", endpoint.port);
     *app.state::<ShellState>().child.lock().unwrap() = Some(child);
+
+    // Bind the child to a kill-on-close job (replacing any job from a previous
+    // sidecar, which also cleans up stragglers from an earlier restart).
+    {
+        let state = app.state::<ShellState>();
+        if let Some(previous) = state.job.lock().unwrap().take() {
+            close_job(previous);
+        }
+        if let Some(job) = bind_sidecar_to_job(pid) {
+            *state.job.lock().unwrap() = Some(job);
+        }
+    }
 
     // Drain output and react to unexpected termination.
     let handle = app.clone();
@@ -1338,11 +1416,29 @@ fn main() {
   }
   // Temporary self-test for the Windows overlay titlebar and window background.
   try {
-    const decorumButtons = document.querySelectorAll(
-      '#decorum-tb-minimize, #decorum-tb-maximize, #decorum-tb-close, .decorum-tb-btn',
-    ).length;
+    const container = document.querySelector('[data-tauri-decorum-tb]');
+    const buttons = Array.from(
+      document.querySelectorAll('#decorum-tb-minimize, #decorum-tb-maximize, #decorum-tb-close, .decorum-tb-btn'),
+    );
+    const rect = (node) => {
+      const r = node.getBoundingClientRect();
+      return { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) };
+    };
+    const containerStyle = container ? getComputedStyle(container) : null;
+    const info = {
+      container: container
+        ? { class: container.className, display: containerStyle.display, position: containerStyle.position, top: containerStyle.top, right: containerStyle.right, rect: rect(container) }
+        : null,
+      buttons: buttons.map((button) => ({
+        id: button.id,
+        display: getComputedStyle(button).display,
+        visibility: getComputedStyle(button).visibility,
+        rect: rect(button),
+      })),
+      styleSheets: document.styleSheets.length,
+    };
     await window.api.setBackgroundColor('#101418');
-    await invoke("log_stub", { message: "titlebar self-test " + JSON.stringify({ decorumButtons, background: "ok" }) });
+    await invoke("log_stub", { message: "titlebar self-test " + JSON.stringify({ ...info, background: "ok" }) });
   } catch (error) {
     await invoke("log_stub", { message: "titlebar self-test failed " + String(error) });
   }
