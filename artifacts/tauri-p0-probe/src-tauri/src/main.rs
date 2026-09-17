@@ -62,7 +62,7 @@ struct Probe {
     zoom_native_error: Mutex<Option<String>>,
     zoom_dpr: Mutex<Option<f64>>,
     zoom_css_fallback: Mutex<Option<bool>>,
-    sidecar_pid: Mutex<Option<u32>>,
+    sidecar_pids: Mutex<Vec<u32>>,
     spawn_route: Mutex<Option<String>>,
     spawn_errors: Mutex<Vec<String>>,
     health_status: Mutex<Option<u16>>,
@@ -176,7 +176,7 @@ fn spawn_sidecar_impl(app: &AppHandle, probe: &Probe) -> Result<(u32, String), S
     if std::env::var("PROBE_FORCE_STD").is_err() {
         match try_spawn_plugin(app) {
             Ok(pid) => {
-                *probe.sidecar_pid.lock().unwrap() = Some(pid);
+                probe.sidecar_pids.lock().unwrap().push(pid);
                 let route = "tauri-plugin-shell externalBin (binaries/opencode-cli)".to_string();
                 *probe.spawn_route.lock().unwrap() = Some(route.clone());
                 return Ok((pid, route));
@@ -188,7 +188,7 @@ fn spawn_sidecar_impl(app: &AppHandle, probe: &Probe) -> Result<(u32, String), S
     }
     match try_spawn_std() {
         Ok(pid) => {
-            *probe.sidecar_pid.lock().unwrap() = Some(pid);
+            probe.sidecar_pids.lock().unwrap().push(pid);
             let route = "std::process::Command with absolute path".to_string();
             *probe.spawn_route.lock().unwrap() = Some(route.clone());
             return Ok((pid, route));
@@ -304,7 +304,7 @@ fn build_report(
         },
         "sidecar": {
             "spawned_at_unix_ms": spawned_at_ms,
-            "pid": *probe.sidecar_pid.lock().unwrap(),
+            "pids": *probe.sidecar_pids.lock().unwrap(),
             "route": *probe.spawn_route.lock().unwrap(),
             "spawn_errors": *probe.spawn_errors.lock().unwrap(),
             "health_url": format!("http://127.0.0.1:{}/global/health", port()),
@@ -393,10 +393,13 @@ fn main() {
                 }
                 println!("[probe] REPORT {report}");
 
-                // Cleanup: kill only the exact PID we created.
-                if let Some(pid) = *probe.sidecar_pid.lock().unwrap() {
+                // Cleanup: kill every PID we created. Pressing "spawn sidecar" twice
+                // makes the second child exit (port already bound) while the first
+                // stays alive, so a single "last pid wins" kill leaks a process.
+                let pids = probe.sidecar_pids.lock().unwrap().clone();
+                for pid in pids {
                     kill_pid(pid);
-                    println!("[probe] killed sidecar pid={pid}");
+                    println!("[probe] kill requested for sidecar pid={pid}");
                 }
                 handle.exit(0);
             });
