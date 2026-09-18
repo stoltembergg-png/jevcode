@@ -67,8 +67,75 @@ jobs:
           name: opencode-sidecar
           path: packages/opencode/dist/
 
+  # Upstream deletes old llama.cpp nightlies, so the vendored archive is mirrored
+  # onto a durable release before the platform builds run. The pin lives in
+  # packages/opencode/script/semif-server.lock.json; the fetch script verifies
+  # bytes and sha256 on the way in and is a no-op when the mirror already has it.
+  mirror:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.plan.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Resolve the vendored llama.cpp pin
+        id: plan
+        run: |
+          set -euo pipefail
+          echo "tag=$(bun -e "console.log(require('./packages/opencode/script/semif-server.lock.json').tag)")" >> "$GITHUB_OUTPUT"
+
+      - name: Download and verify the llama.cpp archives
+        env:
+          PIN: ${{ steps.plan.outputs.tag }}
+        run: |
+          set -euo pipefail
+          MIRROR_TAG="semif-server-${PIN}"
+          for TARGET in x86_64-pc-windows-msvc aarch64-apple-darwin x86_64-apple-darwin; do
+            case "$TARGET" in
+              *apple-darwin) EXT=.tar.gz ;;
+              *) EXT=.zip ;;
+            esac
+            export NEXTCODE_SEMIF_MIRROR="https://github.com/${{ github.repository }}/releases/download/${MIRROR_TAG}/semif-server-${PIN}-${TARGET}${EXT}"
+            bun packages/opencode/script/fetch-semif-server.ts --target "$TARGET" --download-only
+          done
+
+      - name: Publish the mirrored archives
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PIN: ${{ steps.plan.outputs.tag }}
+        run: |
+          set -euo pipefail
+          MIRROR_TAG="semif-server-${PIN}"
+          NOTES="Mirrored llama.cpp ${PIN} server binaries (upstream nightlies are ephemeral)."
+          if gh release view "$MIRROR_TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            gh release edit "$MIRROR_TAG" --repo "${{ github.repository }}" --notes "$NOTES" --prerelease
+          else
+            gh release create "$MIRROR_TAG" --repo "${{ github.repository }}" --title "$MIRROR_TAG" --notes "$NOTES" --target "$GITHUB_SHA" --prerelease
+          fi
+          LOCK="packages/opencode/script/semif-server.lock.json"
+          for TARGET in x86_64-pc-windows-msvc aarch64-apple-darwin x86_64-apple-darwin; do
+            ASSET=$(bun -e "console.log(require('./${LOCK}').targets['${TARGET}'].asset)")
+            case "$ASSET" in
+              *.tar.gz) EXT=.tar.gz ;;
+              *) EXT=.zip ;;
+            esac
+            NAME="semif-server-${PIN}-${TARGET}${EXT}"
+            cp "packages/desktop/src-tauri/.semif-cache/${ASSET}" "/tmp/${NAME}"
+            gh release upload "$MIRROR_TAG" "/tmp/${NAME}" --clobber --repo "${{ github.repository }}"
+          done
+
   build:
-    needs: sidecar
+    needs: [sidecar, mirror]
     strategy:
       fail-fast: false
       matrix:
@@ -177,6 +244,21 @@ jobs:
             *) echo "unsupported runner"; exit 1 ;;
           esac
           ls -l packages/desktop/src-tauri/binaries
+
+      - name: Vendor the llama-server runtime
+        shell: bash
+        env:
+          PIN: ${{ needs.mirror.outputs.tag }}
+        run: |
+          set -euo pipefail
+          TRIPLE=$(rustc -vV | sed -n 's/^host: //p')
+          case "$RUNNER_OS" in
+            Windows) EXT=.zip ;;
+            macOS) EXT=.tar.gz ;;
+            *) echo "unsupported runner"; exit 1 ;;
+          esac
+          export NEXTCODE_SEMIF_MIRROR="https://github.com/${{ github.repository }}/releases/download/semif-server-${PIN}/semif-server-${PIN}-${TRIPLE}${EXT}"
+          bun packages/opencode/script/fetch-semif-server.ts --target "$TRIPLE"
 
       - name: Build the renderer
         working-directory: packages/desktop
@@ -429,12 +511,15 @@ jobs:
               cat release-notes.md
             fi
           } > gh-release-body.md
+          # Beta-channel releases are pre-releases so stable users never see them.
+          PRERELEASE=""
+          if [ "$CHANNEL" = "beta" ]; then PRERELEASE="--prerelease"; fi
           if gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
-            gh release edit "$TAG" --repo "${{ github.repository }}" --notes-file gh-release-body.md
+            gh release edit "$TAG" --repo "${{ github.repository }}" --notes-file gh-release-body.md $PRERELEASE
           else
             TARGET=""
             if [ "$GITHUB_REF_TYPE" != "tag" ]; then TARGET="--target=$GITHUB_SHA"; fi
-            gh release create "$TAG" --repo "${{ github.repository }}" --title "$TAG" --notes-file gh-release-body.md $TARGET
+            gh release create "$TAG" --repo "${{ github.repository }}" --title "$TAG" --notes-file gh-release-body.md $TARGET $PRERELEASE
           fi
           # Only the platform bundles and the merged feed: the sidecar artifact is internal.
           find artifacts/tauri-release-* -type f \( -name "*.exe" -o -name "*.dmg" -o -name "*.app.tar.gz" -o -name "*.sig" \) -print0 |
