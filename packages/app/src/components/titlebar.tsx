@@ -646,6 +646,11 @@ function TitlebarUpdateIconButton(props: { state: TitlebarUpdatePillState }) {
 }
 
 function ChannelIndicator(props: { debugTools?: { visible: boolean; toggle: () => void } }) {
+  // Only a real dev-server run advertises the channel. The Vite plugin falls back to "dev"
+  // when OPENCODE_CHANNEL is unset (packages/app/vite.js), which used to surface a DEV chip
+  // in packaged builds; the debug bar it toggles is gated the same way in the layout.
+  if (!import.meta.env.DEV) return <></>
+
   const channel = import.meta.env.VITE_OPENCODE_CHANNEL
   if (channel === "dev" && props.debugTools) {
     return (
