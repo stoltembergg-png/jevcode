@@ -356,3 +356,64 @@ body:not([data-new-layout]) {
     }
   }
 }
+
+/* Shell tool: a leading icon plus a translated action derived from the command.
+   The raw command and its output only render in the expanded body. */
+[data-component="tool-trigger"] [data-component="shell-tool-icon"] {
+  color: var(--v2-icon-icon-muted, var(--icon-weak, currentColor));
+}
+
+/* The action reads as a description of what is happening, so it is not as
+   heavy as a tool title. The optional target keeps the muted subtitle styling. */
+[data-component="tool-trigger"] [data-component="shell-tool-action"] {
+  font-weight: var(--font-weight-regular);
+}
+
+/* Expand/collapse motion, scoped to the shell output so other tool rows are
+   untouched. Kobalte keeps the content mounted while these run, so both
+   directions animate. Height is only animated on a user toggle, never while
+   output streams, and the whole thing is disabled under reduced motion. */
+[data-component="collapsible"] [data-slot="collapsible-content"]:has(> [data-component="bash-output"]) {
+  overflow: hidden;
+}
+
+[data-component="collapsible"]
+  [data-slot="collapsible-content"]:has(> [data-component="bash-output"])[data-expanded] {
+  animation: shellToolOutputIn var(--motion-panel, 220ms) var(--motion-ease-out, cubic-bezier(0.22, 1, 0.36, 1));
+}
+
+[data-component="collapsible"]
+  [data-slot="collapsible-content"]:has(> [data-component="bash-output"])[data-closed] {
+  animation: shellToolOutputOut var(--motion-panel, 220ms) var(--motion-ease-in, cubic-bezier(0.4, 0, 1, 1));
+}
+
+@keyframes shellToolOutputIn {
+  from {
+    height: 0;
+    opacity: 0;
+  }
+  to {
+    height: var(--kb-collapsible-content-height);
+    opacity: 1;
+  }
+}
+
+@keyframes shellToolOutputOut {
+  from {
+    height: var(--kb-collapsible-content-height);
+    opacity: 0;
+  }
+  to {
+    height: 0;
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-component="collapsible"]
+    [data-slot="collapsible-content"]:has(> [data-component="bash-output"])[data-expanded],
+  [data-component="collapsible"]
+    [data-slot="collapsible-content"]:has(> [data-component="bash-output"])[data-closed] {
+    animation: none;
+  }
+}

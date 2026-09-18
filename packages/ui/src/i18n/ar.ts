@@ -1,4 +1,13 @@
 export const dict = {
+  "ui.tool.shell.action.search": "Searching files",
+  "ui.tool.shell.action.list": "Listing files",
+  "ui.tool.shell.action.read": "Reading files",
+  "ui.tool.shell.action.test": "Running tests",
+  "ui.tool.shell.action.build": "Building",
+  "ui.tool.shell.action.git": "Running git {{verb}}",
+  "ui.tool.shell.action.install": "Installing dependencies",
+  "ui.tool.shell.action.fetch": "Fetching",
+  "ui.tool.shell.action.command": "Running a command",
   "ui.sessionReview.title": "تغييرات الجلسة",
   "ui.sessionReview.title.git": "تغييرات Git",
   "ui.sessionReview.title.branch": "تغييرات الفرع",

@@ -62,6 +62,7 @@ import { AnimatedCountList } from "./tool-count-summary"
 import { ToolStatusTitle } from "./tool-status-title"
 import { patchFiles } from "./apply-patch-file"
 import { partDefaultOpen } from "./part-default-open"
+import { summarizeShellCommand } from "./shell-command-summary"
 import { animate } from "motion"
 import { attached, inline, kind, typeLabel } from "./message-file"
 import { readPartText } from "./message-part-text"
@@ -2088,8 +2089,18 @@ ToolRegistry.register({
     const i18n = useI18n()
     const pending = () => props.status === "pending" || props.status === "running"
     const sawPending = pending()
+    const command = createMemo(() => props.input.command ?? props.metadata.command ?? "")
+    // There is no upstream shell summary, so the collapsed row shows a translated
+    // action derived from the command instead of dumping the raw command. The full
+    // command and output stay in the expanded body.
+    const summary = createMemo(() => summarizeShellCommand(command()))
+    const label = createMemo(() => {
+      const value = summary()
+      return value ? i18n.t(value.key, value.params) : i18n.t("ui.tool.shell")
+    })
+    const target = createMemo(() => summary()?.target)
     const text = createMemo(() => {
-      const cmd = props.input.command ?? props.metadata.command ?? ""
+      const cmd = command()
       const out = stripAnsi(props.output || props.metadata.output || "").replace(/\r\n?/g, "\n")
       return `$ ${cmd}${out ? "\n\n" + out : ""}`
     })
@@ -2111,12 +2122,15 @@ ToolRegistry.register({
         allowOpenWhilePending
         trigger={(open) => (
           <div data-slot="basic-tool-tool-info-structured">
+            <span data-slot="basic-tool-tool-indicator" data-component="shell-tool-icon">
+              <Icon name="console" size="small" />
+            </span>
             <div data-slot="basic-tool-tool-info-main">
-              <span data-slot="basic-tool-tool-title">
-                <TextShimmer text={i18n.t("ui.tool.shell")} active={pending()} />
+              <span data-slot="basic-tool-tool-title" data-component="shell-tool-action">
+                <TextShimmer text={label()} active={pending()} />
               </span>
-              <Show when={!open() && props.input.command}>
-                <ShellSubmessage text={props.input.command} animate={sawPending} />
+              <Show when={!open() && target()}>
+                {(value) => <ShellSubmessage text={value()} animate={sawPending} />}
               </Show>
             </div>
           </div>
