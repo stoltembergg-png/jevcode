@@ -62,7 +62,7 @@ fn bind_sidecar_to_job(pid: u32) -> Option<isize> {
     unsafe {
         let job = CreateJobObjectW(std::ptr::null(), std::ptr::null());
         if job.is_null() {
-            eprintln!("[shell] job object: create failed");
+            log::error!("[shell] job object: create failed");
             return None;
         }
         let mut info: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = std::mem::zeroed();
@@ -75,23 +75,23 @@ fn bind_sidecar_to_job(pid: u32) -> Option<isize> {
         ) == 0
         {
             CloseHandle(job);
-            eprintln!("[shell] job object: limit failed");
+            log::error!("[shell] job object: limit failed");
             return None;
         }
         let process: HANDLE = OpenProcess(PROCESS_SET_QUOTA | PROCESS_TERMINATE, FALSE, pid);
         if process.is_null() {
             CloseHandle(job);
-            eprintln!("[shell] job object: OpenProcess failed");
+            log::error!("[shell] job object: OpenProcess failed");
             return None;
         }
         let assigned = AssignProcessToJobObject(job, process);
         CloseHandle(process);
         if assigned == 0 {
             CloseHandle(job);
-            eprintln!("[shell] job object: assign failed");
+            log::error!("[shell] job object: assign failed");
             return None;
         }
-        println!("[shell] sidecar {pid} bound to a kill-on-close job object");
+        log::info!("[shell] sidecar {pid} bound to a kill-on-close job object");
         Some(job as isize)
     }
 }
@@ -157,7 +157,7 @@ fn start_sidecar(app: &AppHandle) {
     let port = match free_port() {
         Ok(port) => port,
         Err(error) => {
-            eprintln!("[shell] no free port: {error}");
+            log::error!("[shell] no free port: {error}");
             return;
         }
     };
@@ -201,12 +201,12 @@ fn spawn_sidecar(app: &AppHandle, endpoint: Endpoint, attempt: u32) {
     let (mut events, child) = match spawned {
         Ok(value) => value,
         Err(error) => {
-            eprintln!("[shell] sidecar failed: {error}");
+            log::error!("[shell] sidecar failed: {error}");
             return;
         }
     };
     let pid = child.pid();
-    println!("[shell] sidecar spawned pid={pid} port={}", endpoint.port);
+    log::info!("[shell] sidecar spawned pid={pid} port={}", endpoint.port);
     *app.state::<ShellState>().child.lock().unwrap() = Some(child);
 
     // Bind the child to a kill-on-close job (replacing any job from a previous
@@ -227,10 +227,10 @@ fn spawn_sidecar(app: &AppHandle, endpoint: Endpoint, attempt: u32) {
     tauri::async_runtime::spawn(async move {
         while let Some(event) = events.recv().await {
             match event {
-                CommandEvent::Stdout(line) => println!("[sidecar] {}", String::from_utf8_lossy(&line).trim_end()),
-                CommandEvent::Stderr(line) => eprintln!("[sidecar] {}", String::from_utf8_lossy(&line).trim_end()),
+                CommandEvent::Stdout(line) => log::info!("[sidecar] {}", String::from_utf8_lossy(&line).trim_end()),
+                CommandEvent::Stderr(line) => log::error!("[sidecar] {}", String::from_utf8_lossy(&line).trim_end()),
                 CommandEvent::Terminated(payload) => {
-                    println!("[shell] sidecar terminated: {payload:?}");
+                    log::info!("[shell] sidecar terminated: {payload:?}");
                     let state = handle.state::<ShellState>();
                     state.child.lock().unwrap().take();
                     *state.ready.lock().unwrap() = None;
@@ -240,10 +240,10 @@ fn spawn_sidecar(app: &AppHandle, endpoint: Endpoint, attempt: u32) {
                     }
                     let _ = handle.emit("sidecar-terminated", ());
                     if attempt < 2 {
-                        println!("[shell] restarting sidecar (attempt {})", attempt + 1);
+                        log::info!("[shell] restarting sidecar (attempt {})", attempt + 1);
                         spawn_sidecar(&handle, endpoint_for_drain.clone(), attempt + 1);
                     } else {
-                        eprintln!("[shell] sidecar restart limit reached");
+                        log::error!("[shell] sidecar restart limit reached");
                     }
                 }
                 _ => {}
@@ -258,12 +258,12 @@ fn spawn_sidecar(app: &AppHandle, endpoint: Endpoint, attempt: u32) {
         let started = Instant::now();
         loop {
             if started.elapsed() > READY_TIMEOUT {
-                eprintln!("[shell] server did not become healthy within {}s", READY_TIMEOUT.as_secs());
+                log::error!("[shell] server did not become healthy within {}s", READY_TIMEOUT.as_secs());
                 return;
             }
             if let Ok(200) = http_health(poll_endpoint.port, &poll_endpoint.password) {
                 let url = format!("http://127.0.0.1:{}", poll_endpoint.port);
-                println!("[shell] server ready at {url}");
+                log::info!("[shell] server ready at {url}");
                 *poll_handle.state::<ShellState>().ready.lock().unwrap() = Some(Ready {
                     url: url.clone(),
                     username: poll_endpoint.username.clone(),
@@ -376,13 +376,11 @@ fn store_length(app: AppHandle, name: String) -> Result<usize, String> {
     Ok(store_read(&app, &name)?.len())
 }
 
-/// Development helper: lets the renderer report diagnostics to stdout. Silent in
-/// release builds.
+/// Lets the renderer (including release builds) report diagnostics into the
+/// plugin's log file, so `export_debug_logs` carries fatal renderer errors too.
 #[tauri::command]
 fn log_stub(message: String) {
-    if cfg!(debug_assertions) {
-        println!("[stub] {message}");
-    }
+    log::info!("[stub] {message}");
 }
 
 #[tauri::command]
@@ -398,7 +396,7 @@ fn kill_sidecar(state: State<'_, ShellState>) {
     *state.stopping.lock().unwrap() = true;
     if let Some(child) = state.child.lock().unwrap().take() {
         let _ = child.kill();
-        println!("[shell] sidecar killed on request");
+        log::info!("[shell] sidecar killed on request");
     }
     *state.ready.lock().unwrap() = None;
 }
@@ -834,7 +832,7 @@ impl DraftStore {
         .map_err(|error| format!("init drafts db: {error}"))?;
         let store = Self { conn: Mutex::new(conn) };
         if let Err(error) = store.gc_orphan_blobs() {
-            eprintln!("[drafts] gc failed: {error}");
+            log::error!("[drafts] gc failed: {error}");
         }
         Ok(store)
     }
@@ -866,7 +864,7 @@ impl DraftStore {
             conn.execute("DELETE FROM blob WHERE id = ?1", [id]).map_err(|error| error.to_string())?;
         }
         if !orphans.is_empty() {
-            println!("[drafts] removed {} orphan blob(s)", orphans.len());
+            log::info!("[drafts] removed {} orphan blob(s)", orphans.len());
         }
         Ok(())
     }
@@ -993,7 +991,7 @@ fn restore_window_state(app: &AppHandle) {
     if state.maximized {
         let _ = window.maximize();
     }
-    println!("[window] restored {}x{} at {},{} (maximized={})", state.width, state.height, state.x, state.y, state.maximized);
+    log::info!("[window] restored {}x{} at {},{} (maximized={})", state.width, state.height, state.x, state.y, state.maximized);
 }
 
 fn save_window_state(app: &AppHandle) {
@@ -1026,9 +1024,9 @@ fn lock_window_state(path: &std::path::Path, window: &tauri::WebviewWindow, maxi
     state.maximized = maximized;
     if let Ok(text) = serde_json::to_string(&state) {
         if let Err(error) = std::fs::write(path, text) {
-            eprintln!("[window] failed to save state: {error}");
+            log::error!("[window] failed to save state: {error}");
         } else {
-            println!("[window] saved state");
+            log::info!("[window] saved state");
         }
     }
 }
@@ -1070,7 +1068,7 @@ fn set_native_translations(
                 .collect::<HashMap<String, String>>()
         })
         .unwrap_or_default();
-    println!("[i18n] bundle received locale={locale} keys={}", messages.len());
+    log::info!("[i18n] bundle received locale={locale} keys={}", messages.len());
     *state.locale.lock().unwrap() = locale;
     *state.messages.lock().unwrap() = messages;
     rebuild_native_menu(&app);
@@ -1079,7 +1077,7 @@ fn set_native_translations(
 
 #[tauri::command]
 fn set_native_menu(app: AppHandle, state: State<'_, NativeI18n>, items: Vec<Value>) -> Result<(), String> {
-    println!("[menu] spec received: {} submenu(s)", items.len());
+    log::info!("[menu] spec received: {} submenu(s)", items.len());
     *state.menu.lock().unwrap() = items;
     rebuild_native_menu(&app);
     Ok(())
@@ -1229,15 +1227,15 @@ fn rebuild_native_menu(app: &AppHandle) {
         Ok(menu) => {
             if cfg!(target_os = "macos") {
                 match app.set_menu(menu) {
-                    Ok(_) => println!("[menu] applied {count} item(s)"),
-                    Err(error) => eprintln!("[menu] failed to apply: {error}"),
+                    Ok(_) => log::info!("[menu] applied {count} item(s)"),
+                    Err(error) => log::error!("[menu] failed to apply: {error}"),
                 }
             } else {
                 // Matches Electron: no native application menu outside macOS.
-                println!("[menu] built {count} item(s) (not applied on this platform)");
+                log::info!("[menu] built {count} item(s) (not applied on this platform)");
             }
         }
-        Err(error) => eprintln!("[menu] failed to build: {error}"),
+        Err(error) => log::error!("[menu] failed to build: {error}"),
     }
 }
 
@@ -1299,8 +1297,8 @@ fn run_menu_action(app: &AppHandle, action: &str) {
                 let _ = window.close();
             }
         }
-        "window.new" => println!("[menu] window.new is not supported yet"),
-        "app.checkForUpdates" => println!("[menu] updater is not wired yet"),
+        "window.new" => log::warn!("[menu] window.new is not supported yet"),
+        "app.checkForUpdates" => log::warn!("[menu] updater is not wired yet"),
         "app.relaunch" => {
             *state.stopping.lock().unwrap() = true;
             if let Some(child) = state.child.lock().unwrap().take() {
@@ -1326,8 +1324,118 @@ fn run_menu_action(app: &AppHandle, action: &str) {
                 let _ = window.eval(format!("document.execCommand('{command}')"));
             }
         }
-        other => println!("[menu] unhandled action {other}"),
+        other => log::warn!("[menu] unhandled action {other}"),
     }
+}
+
+// ---------------------------------------------------------------------------
+// Debug log export (parity with packages/desktop/src/main/logging.ts)
+//
+// Zips the shell log dir plus the opencode server log roots into
+// `<downloads>/opencode-debug-<stamp>.zip`. Debug builds write a fixed temp
+// file so self-tests stay tidy. Entries from the last 24h and under 50 MB are
+// included; heapsnapshots are excluded.
+// ---------------------------------------------------------------------------
+
+const EXPORT_WINDOW_SECS: u64 = 24 * 60 * 60;
+const MAX_EXPORT_FILE_SIZE: u64 = 50 * 1024 * 1024;
+
+#[tauri::command]
+fn export_debug_logs(app: AppHandle, reveal: Option<bool>) -> Result<String, String> {
+    let output = if cfg!(debug_assertions) {
+        std::env::temp_dir().join("opencode-debug-dev.zip")
+    } else {
+        let downloads = app.path().download_dir().map_err(|error| format!("downloads dir: {error}"))?;
+        std::fs::create_dir_all(&downloads).map_err(|error| format!("mkdir: {error}"))?;
+        downloads.join(format!("opencode-debug-{}.zip", chrono::Local::now().format("%Y%m%d%H%M%S")))
+    };
+
+    let log_dir = app.path().app_log_dir().map_err(|error| format!("log dir: {error}"))?;
+    let app_data = app.path().app_data_dir().map_err(|error| format!("app data dir: {error}"))?;
+    let home = app.path().home_dir().map_err(|error| format!("home dir: {error}"))?;
+    let server_roots = [home.join(".local/share/opencode/log"), app_data.join("opencode/log")];
+    let server_logs: Vec<String> = server_roots.iter().map(|root| root.to_string_lossy().into_owned()).collect();
+    let manifest = json!({
+        "generated": chrono::Local::now().to_rfc3339(),
+        "version": app.package_info().version.to_string(),
+        "name": app.package_info().name.to_string(),
+        "packaged": !cfg!(debug_assertions),
+        "platform": std::env::consts::OS,
+        "arch": std::env::consts::ARCH,
+        "userData": app_data.to_string_lossy(),
+        "logs": log_dir.to_string_lossy(),
+        "serverLogs": server_logs,
+    });
+
+    let cutoff = std::time::SystemTime::now()
+        .checked_sub(std::time::Duration::from_secs(EXPORT_WINDOW_SECS))
+        .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+    let mut entries: Vec<(String, std::path::PathBuf)> = Vec::new();
+    collect_recent(&log_dir, &log_dir, "desktop", cutoff, &mut entries);
+    for (index, root) in server_roots.iter().enumerate() {
+        collect_recent(root, root, &format!("server-{}", index + 1), cutoff, &mut entries);
+    }
+
+    write_debug_zip(&output, serde_json::to_string_pretty(&manifest).expect("manifest json"), &entries)
+        .map_err(|error| format!("zip failed: {error}"))?;
+
+    if reveal != Some(false) {
+        let _ = app.opener().reveal_item_in_dir(output.as_path());
+    }
+    log::info!("[logs] exported {}", output.display());
+    Ok(output.to_string_lossy().into_owned())
+}
+
+fn collect_recent(
+    root: &std::path::Path,
+    dir: &std::path::Path,
+    prefix: &str,
+    cutoff: std::time::SystemTime,
+    entries: &mut Vec<(String, std::path::PathBuf)>,
+) {
+    let reader = match std::fs::read_dir(dir) {
+        Ok(reader) => reader,
+        Err(_) => return,
+    };
+    for entry in reader.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            collect_recent(root, &path, prefix, cutoff, entries);
+            continue;
+        }
+        let info = match entry.metadata() {
+            Ok(info) => info,
+            Err(_) => continue,
+        };
+        if info.modified().unwrap_or(std::time::SystemTime::UNIX_EPOCH) < cutoff || info.len() > MAX_EXPORT_FILE_SIZE {
+            continue;
+        }
+        if path.to_string_lossy().ends_with(".heapsnapshot") {
+            continue;
+        }
+        let relative = path.strip_prefix(root).unwrap_or(&path).to_string_lossy().replace('\\', "/");
+        entries.push((format!("{prefix}/{relative}"), path));
+    }
+}
+
+fn write_debug_zip(
+    output: &std::path::Path,
+    manifest: String,
+    entries: &[(String, std::path::PathBuf)],
+) -> Result<(), String> {
+    use std::io::Write;
+    let file = std::fs::File::create(output).map_err(|error| format!("create {}: {error}", output.display()))?;
+    let mut zip = zip::ZipWriter::new(file);
+    let options = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+    zip.start_file("manifest.json", options).map_err(|error| format!("zip manifest: {error}"))?;
+    zip.write_all(manifest.as_bytes()).map_err(|error| format!("zip write: {error}"))?;
+    for (name, path) in entries {
+        zip.start_file(name.clone(), options).map_err(|error| format!("zip entry {name}: {error}"))?;
+        let mut source = std::fs::File::open(path).map_err(|error| format!("open {path:?}: {error}"))?;
+        std::io::copy(&mut source, &mut zip).map_err(|error| format!("zip copy {name}: {error}"))?;
+    }
+    zip.finish().map_err(|error| format!("zip finish: {error}"))?;
+    Ok(())
 }
 
 fn main() {
@@ -1337,7 +1445,7 @@ fn main() {
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
             // The single-instance plugin carries the deep-link feature, so URLs in
             // argv are forwarded to the deep-link plugin's on_open_url handler.
-            println!("[shell] second instance: {argv:?}");
+            log::info!("[shell] second instance: {argv:?}");
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.unminimize();
                 let _ = window.show();
@@ -1348,6 +1456,21 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_process::init())
+        .plugin(
+            tauri_plugin_log::Builder::new()
+                .level(log::LevelFilter::Info)
+                // Keep the `[tag] message` shape the stdout diagnostics rely on; add the
+                // timestamp, and mark the level only where it is not info.
+                .format(|out, message, record| {
+                    let stamp = chrono::Local::now().format("[%H:%M:%S] ");
+                    match record.level() {
+                        log::Level::Error => out.finish(format_args!("{stamp}{message} (error)")),
+                        log::Level::Warn => out.finish(format_args!("{stamp}{message} (warn)")),
+                        _ => out.finish(format_args!("{stamp}{message}")),
+                    }
+                })
+                .build(),
+        )
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_deep_link::init());
 
@@ -1505,6 +1628,7 @@ fn main() {
             open_local_file,
             open_path,
             reveal_path,
+            export_debug_logs,
             check_app_exists,
             resolve_app_path,
             draft_get,
@@ -1527,7 +1651,7 @@ fn main() {
                     Ok(store) => {
                         handle.manage(store);
                     }
-                    Err(error) => eprintln!("[drafts] disabled: {error}"),
+                    Err(error) => log::error!("[drafts] disabled: {error}"),
                 }
             }
 
@@ -1551,11 +1675,11 @@ fn main() {
             let emitter = handle.clone();
             let _ = handle.deep_link().on_open_url(move |event| {
                 let urls: Vec<String> = event.urls().into_iter().map(|url| url.to_string()).collect();
-                println!("[shell] deep link: {urls:?}");
+                log::info!("[shell] deep link: {urls:?}");
                 *emitter.state::<ShellState>().pending_deep_links.lock().unwrap() = urls.clone();
                 match emitter.emit("deep-link", urls) {
-                    Ok(()) => println!("[shell] deep-link emitted"),
-                    Err(error) => println!("[shell] deep-link emit failed: {error}"),
+                    Ok(()) => log::info!("[shell] deep-link emitted"),
+                    Err(error) => log::error!("[shell] deep-link emit failed: {error}"),
                 }
             });
 
@@ -1597,7 +1721,7 @@ fn main() {
                 if let Some(child) = app.state::<ShellState>().child.lock().unwrap().take() {
                     let pid = child.pid();
                     let _ = child.kill();
-                    println!("[shell] sidecar killed pid={pid}");
+                    log::info!("[shell] sidecar killed pid={pid}");
                 }
             }
             _ => {}

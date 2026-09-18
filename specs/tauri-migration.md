@@ -525,9 +525,8 @@ must run where the password is available.
   (`webview-zoom.ts`, `window-fullscreen.ts`). Menu commands still forward to the renderer
   as `menu-command`, while `run_menu_action` covers reload, devtools, zoom, fullscreen,
   window operations, edit operations and relaunch.
-- Deliberately deferred to P4: a shell log file (`tauri-plugin-log` replacing
-  electron-log) and therefore a real `exportDebugLogs`. The UI's export action currently
-  resolves without producing an archive; P4 adds the log pipeline and the zip.
+- A shell log file and a real `exportDebugLogs` were also deferred to P4; they are done
+  below (see "Shell logging and debug-log export").
 
 ### Sidecar lifetime hardening — PASS (Windows)
 
@@ -562,9 +561,29 @@ stdin-EOF shutdown if the server supports it) stays open for P4.
   themes), replaced with a `color-mix(currentColor 12%)` overlay so minimize/maximize
   give the same feedback as Windows 11; close keeps decorum's red hover.
 
+### Shell logging and debug-log export — PASS
+
+- `tauri-plugin-log` replaces electron-log: `stdout` target + `LogDir` file target
+  (defaults, no extra targets) with an `Info` level filter and a compact format
+  (`[HH:MM:SS] [tag] message`, level marked only for warn/error). Builder::target adds
+  to the default targets, so the defaults alone are the right configuration — two extra
+  `.target` calls duplicated every line.
+- The whole `[tag]` println/eprintln diagnostic surface moved to `log::info!`/`log::error!`
+  (plus `log::warn!` for the not-yet-wired menu actions), so release logs land in
+  `%LOCALAPPDATA%/<identifier>/logs/OpenCode.log` (6.8 KB, verified). `log_stub` now logs
+  on every platform so fatal renderer errors reach the file in release builds too.
+- `export_debug_logs` command (mirrors `src/main/logging.ts`): zips `desktop/` (shell log
+  dir), `server-1/` (`~/.local/share/opencode/log`), `server-2/` (`userData/opencode/log`)
+  and a `manifest.json` (version, platform, arch, paths, packaged) into
+  `<downloads>/opencode-debug-<stamp>.zip`, then reveals it. Last-24h mtime, ≤ 50 MB per
+  file, `.heapsnapshot` excluded, matching the Electron filters. Debug builds write a
+  fixed `opencode-debug-dev.zip` in the temp dir so the self-test stays tidy.
+- Renderer shim: `exportDebugLogs` invokes the command (was a no-op resolve).
+- Verified: exported zip 845 KB with manifest ✓, `desktop/` ✓ and `server-1/` ✓ entries.
+
 Still to do: `createUpdaterArtifacts` with the signing key, the release workflow with the
-documented secret names, the real install → update → restart cycle, `tauri-plugin-log` +
-`exportDebugLogs`, and macOS orphan hardening.
+documented secret names, the real install → update → restart cycle, and macOS orphan
+hardening.
 
 ## Cross-cutting tasks
 
