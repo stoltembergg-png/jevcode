@@ -581,9 +581,30 @@ stdin-EOF shutdown if the server supports it) stays open for P4.
 - Renderer shim: `exportDebugLogs` invokes the command (was a no-op resolve).
 - Verified: exported zip 845 KB with manifest ✓, `desktop/` ✓ and `server-1/` ✓ entries.
 
-Still to do: `createUpdaterArtifacts` with the signing key, the release workflow with the
-documented secret names, the real install → update → restart cycle, and macOS orphan
-hardening.
+### Release pipeline — PASS
+
+- `.github/workflows/tauri-release.yml` (the two kept workflows are it and
+  `tauri-shell-macos.yml`) builds the bundle on Windows (NSIS) and macOS (.app + .dmg)
+  and publishes a GitHub release on `v*` tags or a manual dispatch.
+- The sidecar is cross-compiled once on Ubuntu (`--targets=opencode-windows-x64,
+  opencode-darwin-arm64`, a new `build.ts` flag) and downloaded by the platform jobs:
+  building it natively on Windows trips Bun's lifecycle shim for tree-sitter-powershell,
+  which expects a project-root node-gyp the pinned Bun does not provide.
+- The Windows install retries around Bun's ENOTEMPTY patched-cache rename
+  (oven-sh/bun#28147), which is flaky under CI timing.
+- Version and tag derive from the tag (`v0.0.2` → `0.0.2`); a dedicated `release` job merges
+  the per-platform `latest-fragment-*.json` files into the single `latest.json` the updater
+  reads and uploads the installers plus the macOS `.app.tar.gz` (the darwin updater
+  artifact) with their `.sig` files.
+- Verified end to end: `v0.0.2` published with **both** platforms signed in `latest.json`,
+  both asset URLs answer 200, and the installed Windows build reports "Você está
+  atualizado" from the real HTTPS feed.
+- Secrets: `TAURI_SIGNING_PRIVATE_KEY` + `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` enable
+  signing/updater artifacts (`createUpdaterArtifacts` turns on by itself); the Apple and
+  Azure secrets stay optional and degrade gracefully.
+
+Still to do: install `v0.0.1` and let the updater move it to `v0.0.2` (the real
+install → update → restart cycle), and macOS orphan hardening.
 
 ## Cross-cutting tasks
 
