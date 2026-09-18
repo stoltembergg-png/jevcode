@@ -100,11 +100,10 @@ run needs network, worse UX, new failure modes), splitting a "minimal" build (su
 Risk — · Impact L.
 
 ### 9. Renderer bundle
-46.9 MB of source maps are embedded in the app because `vite.tauri.config.ts` sets
-`build.sourcemap: true`; the Tauri build embeds everything in `frontendDist`.
-
-**Recommendation:** emit maps only for debug builds (`TAURI_ENV_DEBUG`) or not at all in release,
-saving ~47 MB per binary and build time. Effort S · Risk L · Impact M.
+**Done:** source maps were embedded in every build because `vite.tauri.config.ts` set
+`build.sourcemap: true`; they are now gated behind `TAURI_ENV_DEBUG` (dev keeps them, release drops
+them), which took `web-dist` from 81.9 MB to **35.0 MB** (0 `.map` files). The remaining bundle item is
+the 1.3 MB onboarding video, which is an eager module import in `help-button.tsx`.
 
 ## Ranked roadmap
 
@@ -112,7 +111,7 @@ saving ~47 MB per binary and build time. Effort S · Risk L · Impact M.
 | --- | --- | --- | --- | --- | --- | --- |
 | 1 | Windows shell CI job (build + boot + self-tests) | CI | H | S/M | L | next |
 | 2 | Wire `check:generated` into CI | protocol | M | S | L | next |
-| 3 | Drop production source maps from the Tauri build | bundle | M | S | L | next |
+| 3 | ~~Drop production source maps from the Tauri build~~ **done** (81.9 MB → 35.0 MB) | bundle | M | S | L | done |
 | 4 | Event-log retention + one-time compaction | storage | H | M | M | next |
 | 5 | Stale channel-DB cleanup | storage | L | S | L | next |
 | 6 | Shell panic hook into the exported log | observability | M | S | L | soon |

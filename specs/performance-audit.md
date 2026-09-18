@@ -17,7 +17,7 @@ read-only evidence passes over the repository. The roadmap lives in
 | Our WebView2 processes (6) | 441 MB |
 | Total | **≈ 930 MB** |
 | Sidecar idle CPU | **1.2%** of one core (0.19 s / 15 s) |
-| `web-dist` | 81.9 MB / 1789 files — **46.9 MB is source maps**, 1.3 MB an onboarding mp4 |
+| `web-dist` | 81.9 MB / 1789 files — **46.9 MB is source maps**, 1.3 MB an onboarding mp4 (release builds are now **35.0 MB** after the source-map fix, see §2) |
 | Server DB `opencode.db` | **3.13 GB**, `event` = **2.93 GB** (`part` 176 MB, `message` 69 MB, `session` 0.1 MB) |
 | Shell drafts DB | 3.5 MB (`drafts.sqlite`, scanned on every boot) |
 | models.dev cache | not present at `%LOCALAPPDATA%\opencode\Cache` in this environment (see §3) |
@@ -120,7 +120,7 @@ though its popup is conditional, so it ships in the entry chunk.
 
 | Fix | Impact | Effort | Risk |
 | --- | --- | --- | --- |
-| Emit source maps only for debug builds (`TAURI_ENV_DEBUG`) | M | S | L |
+| **Done** — source maps gated behind `TAURI_ENV_DEBUG` (`vite.tauri.config.ts`, `predev-tauri.ts`): measured `web-dist` 81.9 MB → **35.0 MB**, 0 `.map` files; dev keeps maps | M | S | L |
 | Move the onboarding video behind a dynamic import | L | S | L |
 | Defer/limit `gc_orphan_blobs` (after first paint, or bounded batch) | M | S/M | L |
 

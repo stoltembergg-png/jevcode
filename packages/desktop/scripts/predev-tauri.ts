@@ -49,6 +49,8 @@ console.log(`sidecar staged: ${dest}`)
 // `tauri dev`, which rebuilds for you). Rebuilding only the renderer has no effect.
 if (!existsSync(path.join(desktop, "src-tauri/web-dist/index.html"))) {
   console.log("renderer assets missing: building with vite.tauri.config.ts")
+  // Local staging is a debug flow: keep source maps, which the release builds drop.
+  process.env.TAURI_ENV_DEBUG ??= "true"
   const built = await $`bun x vite build --config vite.tauri.config.ts`.cwd(desktop).nothrow()
   if (built.exitCode !== 0) {
     console.error(built.stderr.toString())

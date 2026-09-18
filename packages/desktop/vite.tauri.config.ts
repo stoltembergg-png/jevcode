@@ -9,7 +9,10 @@ export default defineConfig({
   publicDir: "../../../app/public",
   root: "src/renderer",
   build: {
-    sourcemap: true,
+    // Tauri embeds `frontendDist` into the binary at compile time, so shipping source maps
+    // added ~47 MB to every build. Keep them for debug builds (tauri dev sets
+    // TAURI_ENV_DEBUG, and the local staging script sets it too) and drop them otherwise.
+    sourcemap: process.env.TAURI_ENV_DEBUG === "true",
     outDir: "../../src-tauri/web-dist",
     emptyOutDir: true,
   },
