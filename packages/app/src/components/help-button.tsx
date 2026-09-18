@@ -1,12 +1,11 @@
 import { Icon as IconV2 } from "@opencode-ai/ui/v2/icon"
 import { IconButtonV2 } from "@opencode-ai/ui/v2/icon-button-v2"
 import { isRTL } from "@kobalte/core/i18n"
-import { createSignal, Show } from "solid-js"
+import { createEffect, createSignal, Show } from "solid-js"
 import { Drawer, DrawerClose, DrawerContent } from "@/components/ui/drawer"
 import { usePlatform } from "@/context/platform"
 import { useSettings } from "@/context/settings"
 import { useLanguage } from "@/context/language"
-import introducingTabsVideo from "@/assets/help/introducing-tabs.mp4"
 import homeImage from "@/assets/help/home.png"
 import tabsImage from "@/assets/help/tabs.png"
 
@@ -21,6 +20,14 @@ export function TabsInfoPopup() {
   const [drawerOpen, setDrawerOpen] = createSignal(false)
   const windows = () => platform.platform === "desktop" && platform.os === "windows"
   const rtl = () => isRTL(language.intl())
+
+  // The onboarding clip is ~1.3 MB. Import it only when the popup is actually displayed
+  // instead of shipping it inside the entry chunk.
+  const [videoSrc, setVideoSrc] = createSignal<string>()
+  createEffect(() => {
+    if (!settings.general.shouldDisplayTabsToast()) return
+    void import("@/assets/help/introducing-tabs.mp4").then((module) => setVideoSrc(module.default))
+  })
 
   return (
     <Drawer open={drawerOpen()} onOpenChange={setDrawerOpen} side={rtl() ? "left" : "right"}>
@@ -55,7 +62,7 @@ export function TabsInfoPopup() {
             }}
           >
             <video
-              src={introducingTabsVideo}
+              src={videoSrc()}
               class="absolute inset-0 h-full w-full object-cover"
               loop
               muted

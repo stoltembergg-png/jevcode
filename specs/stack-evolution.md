@@ -109,7 +109,7 @@ the 1.3 MB onboarding video, which is an eager module import in `help-button.tsx
 
 | # | Item | Area | Impact | Effort | Risk | When |
 | --- | --- | --- | --- | --- | --- | --- |
-| 1 | Windows shell CI job (build + boot + self-tests) | CI | H | S/M | L | next |
+| 1 | ~~Windows shell CI job (build + boot + self-tests)~~ **added** (`.github/workflows/tauri-shell-windows.yml`: cross-compiled sidecar + shell boot/assert; first run pending) | CI | H | S/M | L | done |
 | 2 | Wire `check:generated` into CI | protocol | M | S | L | next |
 | 3 | ~~Drop production source maps from the Tauri build~~ **done** (81.9 MB → 35.0 MB) | bundle | M | S | L | done |
 | 4 | Event-log retention + one-time compaction | storage | H | M | M | next |

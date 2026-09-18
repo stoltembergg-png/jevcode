@@ -1,0 +1,145 @@
+name: tauri-shell-windows
+
+# Runs the real Tauri shell on a Windows runner and asserts the behaviour that the
+# macOS job cannot see: the sidecar is bound to a kill-on-close job object, the
+# decorum caption controls render, the server boots and the renderer exercises the
+# store. Windows is the primary product platform, so it must not rely on the
+# release workflow (which only runs on tags) for this signal.
+#
+# The sidecar is cross-compiled on Ubuntu: building it natively on Windows trips
+# Bun's lifecycle shim for tree-sitter-powershell (see tauri-release.yml).
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [tauri-shell]
+    paths:
+      - "packages/desktop/**"
+      - "packages/app/**"
+      - "packages/ui/**"
+      - "packages/session-ui/**"
+      - "packages/client/**"
+      - "packages/identity/**"
+      - "packages/opencode/**"
+      - ".github/workflows/tauri-shell-windows.yml"
+
+concurrency:
+  group: tauri-shell-windows-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  sidecar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Build the Windows sidecar
+        working-directory: packages/opencode
+        run: bun run build --skip-embed-web-ui --targets=opencode-windows-x64
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: opencode-sidecar-windows
+          path: packages/opencode/dist/
+
+  shell:
+    needs: sidecar
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Bun's patched-dependency cache rename is racy on Windows
+          # (oven-sh/bun#28147, ENOTEMPTY while applying patchfiles), so a cleared
+          # cache plus a bounded retry is the reliable combination.
+          ok=0
+          for attempt in 1 2 3; do
+            bun pm cache rm || true
+            if bun install --linker hoisted; then ok=1; break; fi
+            echo "bun install attempt $attempt failed; retrying"
+            sleep 5
+          done
+          [ "$ok" = "1" ] || exit 1
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: packages/desktop/src-tauri
+
+      - name: Download the Windows sidecar
+        uses: actions/download-artifact@v4
+        with:
+          name: opencode-sidecar-windows
+          path: packages/opencode/dist
+
+      - name: Stage the sidecar for externalBin
+        shell: bash
+        run: |
+          set -euo pipefail
+          TRIPLE=$(rustc -vV | sed -n 's/^host: //p')
+          BIN="packages/opencode/dist/opencode-windows-x64/bin/opencode.exe"
+          test -f "$BIN"
+          mkdir -p packages/desktop/src-tauri/binaries
+          cp "$BIN" "packages/desktop/src-tauri/binaries/opencode-cli-${TRIPLE}.exe"
+          ls -l packages/desktop/src-tauri/binaries
+
+      - name: Build the renderer
+        working-directory: packages/desktop
+        run: bun run build:renderer-tauri
+
+      - name: Build the shell
+        working-directory: packages/desktop/src-tauri
+        run: cargo build
+
+      - name: Run the shell and assert its behaviour
+        working-directory: packages/desktop/src-tauri
+        shell: bash
+        run: |
+          set -uo pipefail
+          ./target/debug/opencode-desktop.exe > run.log 2>&1 &
+          PID=$!
+          sleep 40
+          kill "$PID" 2>/dev/null || true
+          sleep 3
+          echo "=== shell log (filtered) ==="
+          grep -E '^\[(shell|menu|i18n|store|sidecar|window|stub)\]' run.log | head -80 || true
+          echo "=== assertions ==="
+          fail=0
+          grep -q "server ready" run.log || { echo "FAIL: sidecar server never became ready"; fail=1; }
+          grep -q "kill-on-close job object" run.log || { echo "FAIL: sidecar is not bound to a job object"; fail=1; }
+          grep -q "\[stub\] titlebar self-test" run.log || { echo "FAIL: decorum caption controls were not rendered"; fail=1; }
+          grep -q "\[stub\] draft self-test" run.log || { echo "FAIL: drafts store self-test did not run"; fail=1; }
+          grep -q "\[store\] get" run.log || { echo "FAIL: renderer did not exercise the store"; fail=1; }
+          grep -q "sidecar killed" run.log || { echo "WARN: sidecar kill on exit not observed"; }
+          echo "=== app data ==="
+          ls -la "$LOCALAPPDATA/ai.opencode.desktop.v2.dev" 2>/dev/null || true
+          exit $fail
+
+      - name: Upload shell log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-shell-windows-log
+          path: packages/desktop/src-tauri/run.log
+          if-no-files-found: warn

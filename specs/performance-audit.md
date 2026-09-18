@@ -121,7 +121,7 @@ though its popup is conditional, so it ships in the entry chunk.
 | Fix | Impact | Effort | Risk |
 | --- | --- | --- | --- |
 | **Done** — source maps gated behind `TAURI_ENV_DEBUG` (`vite.tauri.config.ts`, `predev-tauri.ts`): measured `web-dist` 81.9 MB → **35.0 MB**, 0 `.map` files; dev keeps maps | M | S | L |
-| Move the onboarding video behind a dynamic import | L | S | L |
+| **Done** — onboarding video behind a dynamic import (`help-button.tsx`): the entry chunk no longer references it; it loads as its own chunk when the popup shows | L | S | L |
 | Defer/limit `gc_orphan_blobs` (after first paint, or bounded batch) | M | S/M | L |
 
 ## 3. Providers / models
