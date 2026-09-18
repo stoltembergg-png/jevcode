@@ -205,7 +205,7 @@ jobs:
               const e = process.env.AZURE_TRUSTED_SIGNING_ENDPOINT;
               const a = process.env.AZURE_TRUSTED_SIGNING_ACCOUNT_NAME;
               const c = process.env.AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE;
-              config.bundle.windows = { signCommand: `artifact-signing-cli -e ${e} -a ${a} -c ${c} -d OpenCode %1` };
+              config.bundle.windows = { signCommand: `artifact-signing-cli -e ${e} -a ${a} -c ${c} -d NextCode %1` };
             }
             fs.writeFileSync("src-tauri/tauri.ci.conf.json", JSON.stringify(config, null, 2));
             console.log(fs.readFileSync("src-tauri/tauri.ci.conf.json", "utf8"));

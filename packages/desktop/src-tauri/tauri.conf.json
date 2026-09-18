@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "OpenCode",
+  "productName": "NextCode",
   "version": "0.0.0",
   "identifier": "ai.opencode.desktop.v2.dev",
   "build": {
@@ -11,7 +11,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "OpenCode",
+        "title": "NextCode",
         "width": 1200,
         "height": 800,
         "minWidth": 800,

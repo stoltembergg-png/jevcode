@@ -3,7 +3,7 @@ name = "opencode-desktop"
 version = "0.0.0"
 edition = "2021"
 publish = false
-description = "OpenCode desktop shell (Tauri v2)"
+description = "NextCode desktop shell (Tauri v2)"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
