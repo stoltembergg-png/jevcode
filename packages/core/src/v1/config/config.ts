@@ -14,6 +14,7 @@ import { ConfigMCPV1 } from "./mcp"
 import { ConfigPermissionV1 } from "./permission"
 import { ConfigPluginV1 } from "./plugin"
 import { ConfigProviderV1 } from "./provider"
+import { ConfigSemifV1 } from "./semif"
 import { ConfigServerV1 } from "./server"
 import { ConfigSkillsV1 } from "./skills"
 
@@ -37,6 +38,9 @@ export const Info = Schema.Struct({
   logLevel: Schema.optional(LogLevelRef).annotate({ description: "Log level" }),
   server: Schema.optional(ConfigServerV1.Server).annotate({
     description: "Server configuration for opencode serve and web commands",
+  }),
+  semif: Schema.optional(ConfigSemifV1.Info).annotate({
+    description: "Local semantic decision (SemIf) model configuration",
   }),
   command: Schema.optional(Schema.Record(Schema.String, ConfigCommandV1.Info)).annotate({
     description: "Command configuration, see https://opencode.ai/docs/commands",
