@@ -22,9 +22,15 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version to build (e.g. 0.1.0). Defaults to 0.0.0."
+        description: "Version to build (e.g. 0.1.0 or 0.1.0-beta.1). Defaults to 0.0.0."
         required: false
         default: "0.0.0"
+      channel:
+        description: "Release channel: prod feeds latest.json; beta feeds beta.json and marks the release as a pre-release"
+        required: false
+        type: choice
+        options: ["prod", "beta"]
+        default: "prod"
       publish:
         description: "Publish a GitHub release with the built artifacts"
         type: boolean
@@ -52,6 +58,8 @@ jobs:
 
       - name: Build the opencode sidecar (cross-compiled)
         working-directory: packages/opencode
+        env:
+          OPENCODE_CHANNEL: ${{ inputs.channel || 'prod' }}
         run: bun run build --skip-embed-web-ui --targets=opencode-windows-x64,opencode-darwin-arm64
 
       - uses: actions/upload-artifact@v4
@@ -115,18 +123,22 @@ jobs:
         shell: bash
         env:
           INPUT_VERSION: ${{ inputs.version || '' }}
+          INPUT_CHANNEL: ${{ inputs.channel || '' }}
         run: |
           set -euo pipefail
           if [ "$GITHUB_REF_TYPE" = "tag" ]; then
             VERSION="${GITHUB_REF_NAME#v}"
             TAG="$GITHUB_REF_NAME"
+            case "$VERSION" in *beta*) CHANNEL="beta";; *) CHANNEL="prod";; esac
           else
             VERSION="${INPUT_VERSION:-0.0.0}"
             TAG="v${VERSION}"
+            case "$VERSION" in *beta*) CHANNEL="beta";; *) CHANNEL="${INPUT_CHANNEL:-prod}";; esac
           fi
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
           echo "TAG=$TAG" >> "$GITHUB_ENV"
-          echo "resolved version=$VERSION tag=$TAG"
+          echo "CHANNEL=$CHANNEL" >> "$GITHUB_ENV"
+          echo "resolved version=$VERSION tag=$TAG channel=$CHANNEL"
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -168,6 +180,8 @@ jobs:
 
       - name: Build the renderer
         working-directory: packages/desktop
+        env:
+          OPENCODE_CHANNEL: ${{ env.CHANNEL }}
         run: bun run build:renderer-tauri
 
       - name: Install the Azure signing CLI (Windows, when credentials exist)
@@ -193,13 +207,19 @@ jobs:
 
       - name: Write the CI Tauri config
         shell: bash
+        env:
+          CHANNEL: ${{ env.CHANNEL }}
         run: |
           set -euo pipefail
           node -e '
             const fs = require("fs");
             const version = process.env.VERSION;
+            const channel = process.env.CHANNEL || "prod";
             const createUpdaterArtifacts = process.env.HAS_UPDATER_KEY === "true";
-            const config = { version, bundle: { createUpdaterArtifacts } };
+            const updaterEndpoints = channel === "beta"
+              ? ["https://github.com/stoltembergg-png/nextcode/releases/download/beta/beta.json"]
+              : ["https://github.com/stoltembergg-png/nextcode/releases/latest/download/latest.json"];
+            const config = { version, bundle: { createUpdaterArtifacts }, plugins: { updater: { endpoints: updaterEndpoints } } };
             const azureReady = process.env.HAS_AZURE === "true" && process.env.RUNNER_OS === "Windows";
             if (azureReady) {
               const e = process.env.AZURE_TRUSTED_SIGNING_ENDPOINT;
@@ -216,6 +236,7 @@ jobs:
         working-directory: packages/desktop
         shell: bash
         env:
+          OPENCODE_CHANNEL: ${{ env.CHANNEL }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
@@ -304,12 +325,15 @@ jobs:
         shell: bash
         env:
           INPUT_VERSION: ${{ inputs.version || '' }}
+          INPUT_CHANNEL: ${{ inputs.channel || '' }}
         run: |
           set -euo pipefail
           if [ "$GITHUB_REF_TYPE" = "tag" ]; then
             echo "TAG=$GITHUB_REF_NAME" >> "$GITHUB_ENV"
+            case "$TAG" in *beta*) echo "CHANNEL=beta" >> "$GITHUB_ENV";; *) echo "CHANNEL=prod" >> "$GITHUB_ENV";; esac
           else
             echo "TAG=v${INPUT_VERSION:-0.0.0}" >> "$GITHUB_ENV"
+            case "$INPUT_VERSION" in *beta*) echo "CHANNEL=beta" >> "$GITHUB_ENV";; *) echo "CHANNEL=prod" >> "$GITHUB_ENV";; esac
           fi
 
       # Group commit subjects between the previous release tag and $TAG by
@@ -385,8 +409,9 @@ jobs:
                 merged.pub_date = fragment.pub_date;
                 Object.assign(merged.platforms, fragment.platforms);
               }
-              fs.writeFileSync("latest.json", JSON.stringify(merged, null, 2));
-              console.log(fs.readFileSync("latest.json", "utf8"));
+              const feedName = (process.env.CHANNEL || "prod") === "beta" ? "beta.json" : "latest.json";
+              fs.writeFileSync(feedName, JSON.stringify(merged, null, 2));
+              console.log(fs.readFileSync(feedName, "utf8"));
             }
           '
 
@@ -416,6 +441,18 @@ jobs:
             xargs -0 -r gh release upload "$TAG" --clobber --repo "${{ github.repository }}"
           if [ -f artifacts/latest.json ]; then
             gh release upload "$TAG" artifacts/latest.json --clobber --repo "${{ github.repository }}"
+          fi
+          if [ -f artifacts/beta.json ]; then
+            # Beta-channel apps resolve the fixed URL `releases/download/beta/beta.json`,
+            # so the rolling `beta` release must always carry the current feed.
+            if gh release view beta --repo "${{ github.repository }}" >/dev/null 2>&1; then
+              gh release edit beta --repo "${{ github.repository }}" --notes "Beta update feed"
+            else
+              gh release create beta --repo "${{ github.repository }}" --title "beta" --notes "Beta update feed" --target "$GITHUB_SHA" --prerelease
+            fi
+            gh release upload beta artifacts/beta.json --clobber --repo "${{ github.repository }}"
+            git tag -f beta "$GITHUB_SHA" 2>/dev/null || true
+            git push -f origin beta --quiet 2>/dev/null || true
           else
-            echo "no latest.json to upload (unsigned build)"
+            echo "no beta.json to upload (prod channel)"
           fi
