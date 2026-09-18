@@ -4,6 +4,8 @@
 // Must run before any module-level `window.api` access below.
 import "./tauri-api"
 
+import { appVersion } from "./tauri-api"
+
 import {
   ACCEPTED_FILE_EXTENSIONS,
   AppBaseProviders,
@@ -33,6 +35,10 @@ import { DesktopFirstLaunchOnboarding } from "./onboarding"
 import { resetZoom, setPinchZoomEnabled, webviewZoom, zoomIn, zoomOut } from "./webview-zoom"
 import { windowFullscreen } from "./window-fullscreen"
 import { availableStartupServer, readyWslConnections } from "./wsl/connections"
+
+// Prefer the version of the running build; fall back to the workspace package
+// version when the shell does not report one (Electron preload path).
+const shellVersion = (await appVersion) ?? pkg.version
 import "./styles.css"
 import { Splash } from "@opencode-ai/ui/logo"
 import { useTheme } from "@opencode-ai/ui/theme/context"
@@ -173,7 +179,7 @@ const createPlatform = (windowState: DesktopWindowState): Platform => {
   return {
     platform: "desktop",
     os,
-    version: pkg.version,
+    version: shellVersion,
     windowID: windowState.id,
 
     async openDirectoryPickerDialog(opts) {

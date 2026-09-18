@@ -9,11 +9,18 @@
 // later phases (see specs/tauri-migration.md).
 
 import { invoke } from "@tauri-apps/api/core"
+import { getVersion } from "@tauri-apps/api/app"
 import { listen } from "@tauri-apps/api/event"
 import { getCurrentWindow } from "@tauri-apps/api/window"
 import { relaunch as relaunchApp } from "@tauri-apps/plugin-process"
 import { check as checkForUpdate } from "@tauri-apps/plugin-updater"
 import type { UpdaterState } from "@opencode-ai/app/updater"
+
+// The version compiled into this build (CI writes the release tag into the binary),
+// so the UI reports the release it came from rather than the workspace package
+// version. Electron keeps its own `app.getVersion()` path and returns undefined here.
+export const appVersion: Promise<string | undefined> =
+  "__TAURI_INTERNALS__" in window ? getVersion().catch(() => undefined) : Promise.resolve(undefined)
 
 const SETTINGS_STORE = "opencode.settings"
 const DEFAULT_SERVER_URL_KEY = "defaultServerUrl"
