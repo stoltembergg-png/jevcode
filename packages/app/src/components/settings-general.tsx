@@ -127,12 +127,19 @@ export const SettingsGeneral: Component = () => {
 
   const [shells] = createResource(
     async () => {
-      const sdk = serverSdk()
-      if ((await sdk.protocol) === "v1") {
-        return (await sdk.client.pty.shells()).data ?? []
+      // A disconnected server should leave the shell list empty rather than setting the
+      // resource error, because reading an errored resource accessor throws into the
+      // render tree (see the updater install flow).
+      try {
+        const sdk = serverSdk()
+        if ((await sdk.protocol) === "v1") {
+          return (await sdk.client.pty.shells()).data ?? []
+        }
+        // return (await sdk.api.pty.shells()).data
+        return [] as ShellOption[]
+      } catch {
+        return [] as ShellOption[]
       }
-      // return (await sdk.api.pty.shells()).data
-      return [] as ShellOption[]
     },
     { initialValue: [] as ShellOption[] },
   )

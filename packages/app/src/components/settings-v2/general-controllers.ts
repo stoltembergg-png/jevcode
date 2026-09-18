@@ -54,9 +54,16 @@ export function createShellSettingsController() {
   const serverSync = useServerSync()
   const [shells] = createResource(
     async () => {
-      const sdk = serverSdk()
-      if ((await sdk.protocol) === "v1") return (await sdk.client.pty.shells()).data ?? []
-      return [] as ShellOption[]
+      // A disconnected server should leave the shell list empty rather than setting the
+      // resource error, because reading an errored resource accessor throws into the
+      // render tree (see the updater install flow).
+      try {
+        const sdk = serverSdk()
+        if ((await sdk.protocol) === "v1") return (await sdk.client.pty.shells()).data ?? []
+        return [] as ShellOption[]
+      } catch {
+        return [] as ShellOption[]
+      }
     },
     { initialValue: [] as ShellOption[] },
   )

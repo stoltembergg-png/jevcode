@@ -26,8 +26,22 @@ export const SettingsStorageSection: Component = () => {
 
   const [status, { refetch }] = createResource(
     () => sdk().url,
-    () => fetchStorageStatus({ server: sdk().server.http, fetch: fetcher() }),
+    async () => {
+      // The server can disappear mid-flight, for example while the updater kills the
+      // sidecar before installing. Treat that as "no data" instead of setting the
+      // resource error, because reading an errored resource accessor throws into the
+      // render tree and takes down the settings dialog.
+      try {
+        return await fetchStorageStatus({ server: sdk().server.http, fetch: fetcher() })
+      } catch {
+        return undefined
+      }
+    },
   )
+
+  // `status.loading` only covers pending/refreshing; include the pre-fetch "unresolved"
+  // state so the section shows the loader before the first response instead of "—".
+  const loading = () => status.state === "unresolved" || status.loading
 
   const topTables = createMemo(() => (status()?.tables ?? []).slice(0, MAX_TABLES))
 
@@ -63,21 +77,20 @@ export const SettingsStorageSection: Component = () => {
       <SettingsListV2>
         <SettingsRowV2
           title={language.t("settings.general.storage.database.title")}
-          description={
-            <>
-              <div>{language.t("settings.general.storage.database.description")}</div>
-              <Show when={status.error}>
-                <div class="settings-v2-storage-error">{language.t("common.requestFailed")}</div>
-              </Show>
-            </>
-          }
+          description={language.t("settings.general.storage.database.description")}
         >
           <div class="settings-v2-storage-value" aria-live="polite">
-            <Show when={!status.error} fallback={<span class="settings-v2-storage-empty">—</span>}>
-              <Show keyed when={status()} fallback={<LoaderV2 />}>
+            <Switch>
+              <Match keyed when={status()}>
                 {(data) => <span class="settings-v2-storage-size">{formatBytes(data.fileBytes, language.intl())}</span>}
-              </Show>
-            </Show>
+              </Match>
+              <Match when={loading()}>
+                <LoaderV2 />
+              </Match>
+              <Match when={true}>
+                <span class="settings-v2-storage-empty">—</span>
+              </Match>
+            </Switch>
             <IconButtonV2
               type="button"
               variant="ghost-muted"
@@ -97,12 +110,6 @@ export const SettingsStorageSection: Component = () => {
         >
           <div class="settings-v2-storage-tables">
             <Switch>
-              <Match when={status.error}>
-                <span class="settings-v2-storage-empty">—</span>
-              </Match>
-              <Match when={status.loading}>
-                <LoaderV2 />
-              </Match>
               <Match when={topTables().length > 0}>
                 <For each={topTables()}>
                   {(table) => (
@@ -112,6 +119,9 @@ export const SettingsStorageSection: Component = () => {
                     </div>
                   )}
                 </For>
+              </Match>
+              <Match when={loading()}>
+                <LoaderV2 />
               </Match>
               <Match when={true}>
                 <span class="settings-v2-storage-empty">—</span>
