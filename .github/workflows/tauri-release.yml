@@ -105,6 +105,23 @@ jobs:
             bun install
           fi
 
+      - name: Resolve the release version
+        shell: bash
+        env:
+          INPUT_VERSION: ${{ inputs.version || '' }}
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+            TAG="$GITHUB_REF_NAME"
+          else
+            VERSION="${INPUT_VERSION:-0.0.0}"
+            TAG="v${VERSION}"
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
+          echo "resolved version=$VERSION tag=$TAG"
+
       - uses: dtolnay/rust-toolchain@stable
 
       - uses: swatinem/rust-cache@v2
@@ -170,8 +187,6 @@ jobs:
 
       - name: Write the CI Tauri config
         shell: bash
-        env:
-          VERSION: ${{ inputs.version || '0.0.0' }}
         run: |
           set -euo pipefail
           node -e '
@@ -222,9 +237,6 @@ jobs:
 
       - name: Collect artifacts and the updater fragment
         shell: bash
-        env:
-          VERSION: ${{ inputs.version || '0.0.0' }}
-          TAG: ${{ github.ref_type == 'tag' && github.ref_name || format('v{0}', inputs.version || '0.0.0') }}
         run: |
           set -euo pipefail
           BUNDLE="packages/desktop/src-tauri/target/release/bundle"
@@ -266,14 +278,78 @@ jobs:
           path: dist-release/
           if-no-files-found: warn
 
+  release:
+    needs: [sidecar, build]
+    if: (inputs.publish || github.ref_type == 'tag') && needs.build.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - name: Resolve the release version
+        shell: bash
+        env:
+          INPUT_VERSION: ${{ inputs.version || '' }}
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            echo "TAG=$GITHUB_REF_NAME" >> "$GITHUB_ENV"
+          else
+            echo "TAG=v${INPUT_VERSION:-0.0.0}" >> "$GITHUB_ENV"
+          fi
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      # The updater reads a single `latest.json`; the build jobs emit one fragment
+      # per platform (only when the updater key produced a .sig).
+      - name: Merge the updater fragments into latest.json
+        working-directory: artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          node -e '
+            const fs = require("fs");
+            const path = require("path");
+            const walk = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+              const full = path.join(dir, entry.name);
+              return entry.isDirectory() ? walk(full) : [full];
+            });
+            const files = walk(".").filter((file) => path.basename(file).startsWith("latest-fragment-") && file.endsWith(".json"));
+            if (files.length === 0) {
+              console.log("no updater fragments (the key was missing): keeping the release without latest.json");
+            } else {
+              const merged = { version: "", notes: "", pub_date: new Date().toISOString(), platforms: {} };
+              for (const file of files) {
+                const fragment = JSON.parse(fs.readFileSync(file, "utf8"));
+                merged.version = merged.version || fragment.version;
+                merged.pub_date = fragment.pub_date;
+                Object.assign(merged.platforms, fragment.platforms);
+              }
+              fs.writeFileSync("latest.json", JSON.stringify(merged, null, 2));
+              console.log(fs.readFileSync("latest.json", "utf8"));
+            }
+          '
+
       - name: Publish to the GitHub release
-        if: (inputs.publish || github.ref_type == 'tag') && env.HAS_UPDATER_KEY == 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ github.ref_type == 'tag' && github.ref_name || format('v{0}', inputs.version || '0.0.0') }}
         run: |
           set -euo pipefail
-          gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1 || \
-            gh release create "$TAG" --repo "${{ github.repository }}" --title "$TAG" --notes "Tauri build $TAG"
-          gh release upload "$TAG" dist-release/* --clobber --repo "${{ github.repository }}"
+          if gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            gh release edit "$TAG" --repo "${{ github.repository }}" --notes "NextCode $TAG"
+          else
+            TARGET=""
+            if [ "$GITHUB_REF_TYPE" != "tag" ]; then TARGET="--target=$GITHUB_SHA"; fi
+            gh release create "$TAG" --repo "${{ github.repository }}" --title "$TAG" --notes "NextCode $TAG" $TARGET
+          fi
+          # Only the platform bundles and the merged feed: the sidecar artifact is internal.
+          find artifacts/tauri-release-* -type f \( -name "*.exe" -o -name "*.dmg" -o -name "*.sig" \) -print0 |
+            xargs -0 -r gh release upload "$TAG" --clobber --repo "${{ github.repository }}"
+          if [ -f artifacts/latest.json ]; then
+            gh release upload "$TAG" artifacts/latest.json --clobber --repo "${{ github.repository }}"
+          else
+            echo "no latest.json to upload (unsigned build)"
+          fi
