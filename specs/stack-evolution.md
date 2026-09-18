@@ -60,10 +60,13 @@ Effort S · Risk L · Impact M.
 ### 4. Shell (Tauri 2)
 The plugin set is small and each entry earns its place; `decorum` is the only third-party risk
 (Windows-only overlay caption buttons, and it crashed on macOS before we scoped it to a Windows
-capability). Tauri/plugin upgrades should happen as one batch, gated by the release workflow.
+capability).
 
-**Recommendation:** no change now. Revisit `decorum` if Tauri ships first-party overlay caption
-controls; batch-upgrade Tauri + plugins with a CI pass. Effort M (upgrade) · Risk M · Impact M.
+**Verified 2026-09-18:** the 2.x line is already current — `tauri 2.11.5`, `tauri-build 2.6.3` and the
+plugins as pinned in `packages/desktop/src-tauri/Cargo.lock`; `cargo update --dry-run` bumps nothing and
+`bun outdated` reports no `@tauri-apps/*` entry. The newest published Tauri is `3.0.0-alpha`, outside
+our range, so **the next real upgrade is Tauri 3 once it leaves alpha** — do it as one batch, gated by
+the release workflow plus the macOS/Windows shell jobs.
 
 ### 5. Protocol and codegen
 The generated clients already have a reproducibility check (`check:generated`), and it is now wired
@@ -118,7 +121,7 @@ the 1.3 MB onboarding video, which is an eager module import in `help-button.tsx
 | 5 | Stale channel-DB cleanup | storage | L | S | L | next |
 | 6 | Shell panic hook into the exported log | observability | M | S | L | soon |
 | 7 | Isolate `effect/unstable/*` behind adapters | runtime | M | M | M | soon |
-| 8 | Tauri + plugin batch upgrade | shell | M | M | M | when convenient |
+| 8 | Tauri + plugin batch upgrade | shell | — | — | — | **nothing to do now**: 2.x line is current (`tauri 2.11.5`, `cargo update` no-op); next is Tauri 3, currently alpha |
 | 9 | Playwright smoke spec in CI | testing | M | M | M | later |
 | 10 | `@opencode-ai/*` → NextCode package scope | layout | L | L | M | only if published |
 
