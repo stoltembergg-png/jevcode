@@ -56,6 +56,12 @@ jobs:
           cp "$BIN" "packages/desktop/src-tauri/binaries/opencode-cli-${TRIPLE}"
           ls -l packages/desktop/src-tauri/binaries
 
+      - name: Vendor the llama-server runtime
+        run: |
+          set -euo pipefail
+          TRIPLE=$(rustc -vV | sed -n 's/^host: //p')
+          bun packages/opencode/script/fetch-semif-server.ts --target "$TRIPLE"
+
       - name: Build the renderer
         working-directory: packages/desktop
         run: bun run build:renderer-tauri
