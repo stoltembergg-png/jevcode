@@ -56,6 +56,7 @@ import {
 import { setSessionHandoff } from "@/pages/session/handoff"
 import { useSessionLayout } from "@/pages/session/session-layout"
 import { SessionFileBrowserTab, type SessionFileBrowserState } from "@/pages/session/v2/session-file-browser-tab"
+import "./session-side-panel.css"
 
 type ReviewDiff = FileDiffInfo | SnapshotFileDiff | VcsFileDiff
 type RenderDiff = FileDiffInfo | (SnapshotFileDiff & { file: string }) | VcsFileDiff
@@ -301,7 +302,7 @@ export function SessionSidePanel(props: {
           "h-full shrink-0": !props.stacked,
           "h-full min-h-0": props.stacked,
           "pointer-events-none": !open(),
-          "transition-[width] duration-[240ms] ease-[cubic-bezier(0.22,1,0.36,1)] will-change-[width] motion-reduce:transition-none":
+          "transition-[width] duration-[var(--motion-panel)] ease-[var(--motion-ease-out)] will-change-[width] motion-reduce:transition-none":
             !props.size.active() && !props.reviewSnap,
           "rounded-[10px] shadow-[var(--v2-elevation-raised)] overflow-hidden": settings.general.newLayoutDesigns(),
           "flex-1": reviewOpen(),
@@ -310,6 +311,7 @@ export function SessionSidePanel(props: {
       >
         <Show when={open()}>
           <div
+            data-slot="session-side-panel-body"
             class="size-full flex"
             classList={{
               "border-l border-border-weaker-base": !settings.general.newLayoutDesigns(),
@@ -761,7 +763,7 @@ export function SessionSidePanel(props: {
                 id="file-tree-panel"
                 class="relative min-w-0 h-full shrink-0 overflow-hidden"
                 classList={{
-                  "transition-[width] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] will-change-[width] motion-reduce:transition-none":
+                  "transition-[width] duration-[var(--motion-panel)] ease-[var(--motion-ease-out)] will-change-[width] motion-reduce:transition-none":
                     !props.size.active(),
                 }}
                 style={{ width: treeWidth() }}

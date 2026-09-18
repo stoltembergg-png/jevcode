@@ -24,7 +24,11 @@
   text-rendering: geometricPrecision;
 
   transform-origin: var(--kb-menu-content-transform-origin);
-  animation: menu-v2-in 120ms ease-out;
+  animation: menu-v2-in var(--motion-fast) var(--motion-ease-out);
+
+  &[data-closed] {
+    animation: menu-v2-out var(--motion-fast) var(--motion-ease-in) forwards;
+  }
 
   &:focus-visible {
     outline: none;
@@ -186,5 +190,23 @@
   to {
     opacity: 1;
     transform: scale(1);
+  }
+}
+
+@keyframes menu-v2-out {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-component="menu-v2-content"],
+  [data-component="menu-v2-content"][data-closed] {
+    animation: none;
   }
 }

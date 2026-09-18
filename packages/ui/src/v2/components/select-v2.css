@@ -17,11 +17,11 @@
   border-radius: 6px;
   box-shadow: var(--v2-elevation-floating);
   transform-origin: top center;
-  animation: select-v2-content-in 120ms ease-out;
+  animation: select-v2-content-in var(--motion-fast) var(--motion-ease-out);
 }
 
 [data-component="menu-v2-content"][data-slot="select-v2-content"][data-closed] {
-  animation: select-v2-content-out 80ms ease-in forwards;
+  animation: select-v2-content-out var(--motion-fast) var(--motion-ease-in) forwards;
 }
 
 @keyframes select-v2-content-in {
@@ -294,4 +294,11 @@
   [data-slot="menu-v2-item-indicator"]
   svg {
   visibility: hidden;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-component="menu-v2-content"][data-slot="select-v2-content"],
+  [data-component="menu-v2-content"][data-slot="select-v2-content"][data-closed] {
+    animation: none;
+  }
 }

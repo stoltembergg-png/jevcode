@@ -142,6 +142,25 @@
 
     --font-family-text: "Inter", sans-serif;
     --v2-font-family-sans: "Inter", sans-serif;
+
+    /* ── Motion ── */
+    /* Short feedback: hover, press, tab and button states. */
+    --motion-fast: 140ms;
+    /* Surface entrance/exit: panels, dialogs, drawers, menus. */
+    --motion-panel: 220ms;
+    /* Surface dismissal (faster than entrance by design). */
+    --motion-exit: 140ms;
+    --motion-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+    --motion-ease-in: cubic-bezier(0.4, 0, 1, 1);
+  }
+
+  /* Reduced motion: collapse every shared duration to a single frame. */
+  @media (prefers-reduced-motion: reduce) {
+    :root {
+      --motion-fast: 1ms;
+      --motion-panel: 1ms;
+      --motion-exit: 1ms;
+    }
   }
 
   /* OS preference fallback (no JS needed) */

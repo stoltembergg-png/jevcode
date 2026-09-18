@@ -1,0 +1,23 @@
+/* The session panel is keyed on the session identity, so it remounts on every
+   session switch. This mount animation makes that switch read as a transition
+   instead of an instant content swap. */
+[data-component="session-panel-frame"] {
+  animation: sessionPanelFrameIn var(--motion-panel) var(--motion-ease-out) backwards;
+}
+
+@keyframes sessionPanelFrameIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-component="session-panel-frame"] {
+    animation: none;
+  }
+}

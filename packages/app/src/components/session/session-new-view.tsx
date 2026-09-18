@@ -6,6 +6,7 @@ import { useLanguage } from "@/context/language"
 import { Icon } from "@opencode-ai/ui/icon"
 import { Mark } from "@opencode-ai/ui/logo"
 import { getDirectory, getFilename } from "@opencode-ai/core/util/path"
+import "./session-new-view.css"
 
 const MAIN_WORKTREE = "main"
 const CREATE_WORKTREE = "create"
@@ -48,7 +49,7 @@ export function NewSessionView(props: NewSessionViewProps) {
   }
 
   return (
-    <div class={ROOT_CLASS}>
+    <div class={ROOT_CLASS} data-component="session-new-view">
       <div class="h-12 shrink-0" aria-hidden />
       <div class="flex-1 px-6 pb-30 flex items-center justify-center text-center">
         <div class="w-full max-w-200 flex flex-col items-center text-center gap-4">

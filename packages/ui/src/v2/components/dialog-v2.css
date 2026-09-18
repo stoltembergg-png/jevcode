@@ -175,3 +175,92 @@
     height: min(calc(100vh - 92px), 600px);
   }
 }
+
+/* Motion: the scrim fades, the panel lifts in. Both use the shared tokens so
+   every v2 dialog opens and closes with the same feel. */
+[data-component="dialog-overlay"] {
+  animation: dialogV2OverlayIn var(--motion-panel) var(--motion-ease-out);
+}
+
+/* Exit is driven by the dialog layer's `data-dialog-closing` attribute, which
+   stays set until the stack disposes the dialog. Targeting a stable ancestor
+   (instead of a `data-closed` descendant) means the exit animation can never
+   restart or blank mid-close. */
+[data-component="dialog-overlay"]:has(~ [data-dialog-layer][data-dialog-closing]),
+[data-component="dialog-overlay"][data-closed] {
+  animation: dialogV2OverlayOut var(--motion-exit) var(--motion-ease-in) forwards;
+}
+
+[data-component="dialog-v2"] [data-slot="dialog-container"] {
+  animation: dialogV2PanelIn var(--motion-panel) var(--motion-ease-out);
+}
+
+[data-dialog-layer][data-dialog-closing] [data-slot="dialog-container"] {
+  animation: dialogV2PanelOut var(--motion-exit) var(--motion-ease-in) forwards;
+}
+
+/* Fade the content itself on exit so Kobalte's presence keeps it mounted for
+   the whole close (no empty frame), and the surface never vanishes early. */
+[data-dialog-layer][data-dialog-closing] [data-slot="dialog-content"] {
+  animation: dialogV2ContentOut var(--motion-exit) var(--motion-ease-in) forwards;
+}
+
+@keyframes dialogV2OverlayIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes dialogV2OverlayOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes dialogV2PanelIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes dialogV2PanelOut {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.96) translateY(12px);
+  }
+}
+
+@keyframes dialogV2ContentOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-component="dialog-overlay"],
+  [data-component="dialog-overlay"][data-closed],
+  [data-component="dialog-overlay"]:has(~ [data-dialog-layer][data-dialog-closing]),
+  [data-component="dialog-v2"] [data-slot="dialog-container"],
+  [data-dialog-layer][data-dialog-closing] [data-slot="dialog-container"],
+  [data-dialog-layer][data-dialog-closing] [data-slot="dialog-content"] {
+    animation: none;
+  }
+}

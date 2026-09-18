@@ -1,0 +1,22 @@
+/* Fresh-session entrance. The whole session surface lifts and fades in so
+   opening a new session reads as a transition, not an instant swap. */
+[data-component="session-new-design"] {
+  animation: newSessionPanelIn var(--motion-panel) var(--motion-ease-out) backwards;
+}
+
+@keyframes newSessionPanelIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-component="session-new-design"] {
+    animation: none;
+  }
+}

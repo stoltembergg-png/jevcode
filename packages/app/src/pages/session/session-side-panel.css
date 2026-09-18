@@ -1,0 +1,22 @@
+/* Review / file tree panel body. The aside itself snaps open; the content
+   slides and fades so the pane feels like it expands instead of appearing. */
+[data-slot="session-side-panel-body"] {
+  animation: sessionSidePanelBodyIn var(--motion-panel) var(--motion-ease-out);
+}
+
+@keyframes sessionSidePanelBodyIn {
+  from {
+    opacity: 0;
+    transform: translateX(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-slot="session-side-panel-body"] {
+    animation: none;
+  }
+}

@@ -31,11 +31,11 @@
   user-select: none;
   pointer-events: none;
 
-  animation: tooltipV2In 120ms ease-out;
+  animation: tooltipV2In var(--motion-fast) var(--motion-ease-out);
   transform-origin: var(--kb-tooltip-content-transform-origin);
 
   &[data-closed] {
-    animation: tooltipV2Out 80ms ease-in forwards;
+    animation: tooltipV2Out var(--motion-fast) var(--motion-ease-in) forwards;
   }
 }
 

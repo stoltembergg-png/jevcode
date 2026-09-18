@@ -54,12 +54,14 @@ function init() {
       timer.current = undefined
     }
 
+    // Keep the surface mounted long enough for the shared exit motion
+    // (--motion-exit) to finish before it is removed.
     timer.current = setTimeout(() => {
       timer.current = undefined
       current.dispose()
       setStack((items) => items.filter((item) => item.id !== closed))
       lock.value = false
-    }, 100)
+    }, 180)
   }
 
   createEffect(() => {
@@ -103,6 +105,7 @@ function init() {
               />
               <div
                 data-dialog-layer={layer}
+                data-dialog-closing={closing() ? "" : undefined}
                 style={{
                   position: "fixed",
                   inset: "0",

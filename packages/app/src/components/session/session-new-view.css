@@ -1,0 +1,22 @@
+/* New-session screen shown in the session panel. Fades and rises on mount so
+   starting a session reads as one continuous transition. */
+[data-component="session-new-view"] {
+  animation: sessionNewViewIn var(--motion-panel) var(--motion-ease-out) both;
+}
+
+@keyframes sessionNewViewIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-component="session-new-view"] {
+    animation: none;
+  }
+}

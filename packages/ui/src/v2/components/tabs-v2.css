@@ -46,6 +46,10 @@
   flex-shrink: 0;
   white-space: nowrap;
   user-select: none;
+  transition:
+    background-color var(--motion-fast) var(--motion-ease-out),
+    color var(--motion-fast) var(--motion-ease-out),
+    border-color var(--motion-fast) var(--motion-ease-out);
 }
 
 [data-component="tabs-v2"] [data-slot="tabs-v2-trigger"] {
@@ -77,6 +81,7 @@
   align-items: center;
   justify-content: center;
   color: var(--v2-text-text-faint);
+  transition: color var(--motion-fast) var(--motion-ease-out);
 }
 
 [data-component="tabs-v2"] [data-slot="tabs-v2-close-button"]:hover {
@@ -221,4 +226,11 @@
   [data-slot="tabs-v2-trigger-wrapper"]:has([data-selected]) {
   background-color: var(--v2-background-bg-layer-03);
   color: var(--v2-text-text-base);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-component="tabs-v2"] [data-slot="tabs-v2-trigger-wrapper"],
+  [data-component="tabs-v2"] [data-slot="tabs-v2-close-button"] {
+    transition: none;
+  }
 }
