@@ -1,4 +1,8 @@
 [data-component="logo-mark"] {
   width: 16px;
-  aspect-ratio: 4/5;
+  aspect-ratio: 1/1;
+}
+
+[data-component="logo-wordmark"] text {
+  font-family: var(--font-family-sans);
 }

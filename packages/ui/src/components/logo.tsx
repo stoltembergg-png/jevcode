@@ -1,16 +1,20 @@
 import { type ComponentProps } from "solid-js"
 
+const mark =
+  "M0 6270 l0 -6270 6270 0 6270 0 0 6270 0 6270 -6270 0 -6270 0 0 -6270z m8825 2432 c28 -13 69 -33 92 -44 30 -13 56 -38 84 -79 44 -62 57 -75 39 -36 -10 20 -9 20 11 -3 12 -14 34 -50 48 -80 l26 -55 0 -2460 0 -2460 -23 -57 c-22 -55 -60 -105 -47 -62 5 14 1 12 -12 -6 -44 -60 -76 -89 -135 -121 l-63 -34 -345 -1 c-190 0 -283 1 -207 3 99 3 145 8 161 18 12 8 53 17 91 20 39 4 90 11 113 16 40 9 48 7 92 -20 39 -24 54 -28 82 -22 36 8 78 28 78 37 0 3 -4 2 -10 -1 -6 -4 -10 13 -11 42 0 26 -4 69 -8 95 -7 43 -5 50 17 70 13 13 28 32 34 43 7 13 -1 10 -23 -11 -79 -74 -26 -69 -783 -67 l-679 2 -49 24 c-41 20 -48 22 -43 7 3 -10 -8 -34 -27 -59 -18 -24 -43 -57 -55 -74 -12 -18 -29 -42 -38 -55 -13 -18 -20 -20 -38 -12 -16 8 -14 4 8 -15 17 -15 50 -36 74 -47 42 -19 63 -20 760 -20 394 0 739 3 766 6 l50 6 -33 -15 c-29 -14 -128 -15 -780 -13 l-747 3 -67 33 c-76 37 -153 117 -190 198 l-23 49 -5 1665 c-5 1561 -6 1668 -22 1692 -12 18 -14 29 -7 33 12 8 12 8 27 -20 6 -11 12 -15 12 -8 0 7 -14 28 -31 48 l-31 35 -632 1 c-347 0 -640 4 -651 9 -11 5 -15 9 -9 9 6 1 9 12 7 25 -6 30 21 47 92 57 89 13 128 19 134 24 18 10 558 16 634 6 45 -5 129 -15 187 -22 130 -13 147 -16 160 -24 5 -3 10 -1 10 4 0 17 17 13 24 -6 17 -47 134 -173 120 -130 -4 12 -2 17 4 13 10 -6 112 124 112 143 0 17 70 91 86 91 23 0 16 17 -22 60 l-36 40 -918 0 c-915 0 -917 0 -944 -21 -31 -24 -62 -79 -49 -88 34 -25 131 -174 215 -331 17 -32 18 -71 20 -585 l2 -550 6 580 c5 525 7 583 23 613 21 39 32 42 21 5 -4 -16 -10 -773 -13 -1683 -7 -1825 -2 -1695 -69 -1792 -37 -54 -91 -108 -109 -108 -21 0 -15 18 13 36 38 26 103 122 119 179 11 40 15 163 18 605 1 305 0 699 -3 875 -4 224 -7 60 -8 -546 -2 -904 -3 -919 -45 -979 l-15 -21 -38 33 c-20 18 -58 65 -83 105 l-46 72 -43 -64 c-70 -103 -46 -98 -552 -107 -239 -5 -553 -7 -697 -6 -143 2 -256 -1 -250 -5 9 -6 9 -10 0 -13 -15 -6 -7 -27 28 -79 23 -34 34 -41 65 -43 21 -2 43 -7 50 -13 22 -18 77 -25 218 -28 49 -1 57 -3 47 -15 -10 -12 -9 -14 6 -11 10 2 23 4 28 4 6 1 4 5 -4 10 -15 9 15 16 124 26 32 4 65 11 72 17 7 6 27 8 43 4 18 -3 30 -1 30 5 0 11 49 9 66 -3 6 -4 35 1 65 11 30 11 77 22 104 24 28 3 50 6 50 7 0 1 13 4 30 6 16 3 37 11 45 19 22 19 110 46 123 38 13 -8 18 -8 92 3 l50 8 -35 7 -35 6 38 2 c35 1 44 -5 127 -89 82 -84 87 -92 67 -99 -12 -5 -256 -11 -542 -15 -286 -3 -540 -10 -565 -15 -29 -5 97 -9 344 -10 214 0 392 -3 394 -6 3 -3 -240 -5 -540 -5 l-545 0 -59 31 c-119 64 -220 156 -253 229 -44 101 -44 60 -38 2563 4 2215 6 2386 22 2437 45 147 166 256 323 295 48 11 445 13 2532 12 l2475 -2 50 -23z"
+
 export const Mark = (props: { class?: string }) => {
   return (
     <svg
       data-component="logo-mark"
       classList={{ [props.class ?? ""]: !!props.class }}
-      viewBox="0 0 16 20"
+      viewBox="0 0 1254 1254"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
     >
-      <path data-slot="logo-logo-mark-shadow" d="M12 16H4V8H12V16Z" fill="var(--icon-weak-base)" />
-      <path data-slot="logo-logo-mark-o" d="M12 4H4V16H12V4ZM16 20H0V0H16V20Z" fill="var(--icon-strong-base)" />
+      <g transform="translate(0,1254) scale(0.1,-0.1)">
+        <path data-slot="logo-logo-mark-o" d={mark} fill="var(--icon-strong-base)" />
+      </g>
     </svg>
   )
 }
@@ -21,12 +25,13 @@ export const Splash = (props: Pick<ComponentProps<"svg">, "ref" | "class">) => {
       ref={props.ref}
       data-component="logo-splash"
       classList={{ [props.class ?? ""]: !!props.class }}
-      viewBox="0 0 80 100"
+      viewBox="0 0 1254 1254"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
     >
-      <path d="M60 80H20V40H60V80Z" fill="var(--icon-base)" />
-      <path d="M60 20H20V80H60V20ZM80 100H0V0H80V100Z" fill="var(--icon-strong-base)" />
+      <g transform="translate(0,1254) scale(0.1,-0.1)">
+        <path d={mark} fill="var(--icon-strong-base)" />
+      </g>
     </svg>
   )
 }
@@ -34,29 +39,28 @@ export const Splash = (props: Pick<ComponentProps<"svg">, "ref" | "class">) => {
 export const Logo = (props: { class?: string }) => {
   return (
     <svg
+      data-component="logo-wordmark"
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 234 42"
       fill="none"
       classList={{ [props.class ?? ""]: !!props.class }}
     >
-      <g>
-        <path d="M18 30H6V18H18V30Z" fill="var(--icon-weak-base)" />
-        <path d="M18 12H6V30H18V12ZM24 36H0V6H24V36Z" fill="var(--icon-base)" />
-        <path d="M48 30H36V18H48V30Z" fill="var(--icon-weak-base)" />
-        <path d="M36 30H48V12H36V30ZM54 36H36V42H30V6H54V36Z" fill="var(--icon-base)" />
-        <path d="M84 24V30H66V24H84Z" fill="var(--icon-weak-base)" />
-        <path d="M84 24H66V30H84V36H60V6H84V24ZM66 18H78V12H66V18Z" fill="var(--icon-base)" />
-        <path d="M108 36H96V18H108V36Z" fill="var(--icon-weak-base)" />
-        <path d="M108 12H96V36H90V6H108V12ZM114 36H108V12H114V36Z" fill="var(--icon-base)" />
-        <path d="M144 30H126V18H144V30Z" fill="var(--icon-weak-base)" />
-        <path d="M144 12H126V30H144V36H120V6H144V12Z" fill="var(--icon-strong-base)" />
-        <path d="M168 30H156V18H168V30Z" fill="var(--icon-weak-base)" />
-        <path d="M168 12H156V30H168V12ZM174 36H150V6H174V36Z" fill="var(--icon-strong-base)" />
-        <path d="M198 30H186V18H198V30Z" fill="var(--icon-weak-base)" />
-        <path d="M198 12H186V30H198V12ZM204 36H180V6H198V0H204V36Z" fill="var(--icon-strong-base)" />
-        <path d="M234 24V30H216V24H234Z" fill="var(--icon-weak-base)" />
-        <path d="M216 12V18H228V12H216ZM234 24H216V30H234V36H210V6H234V24Z" fill="var(--icon-strong-base)" />
-      </g>
+      <svg x="17" y="0" width="42" height="42" viewBox="0 0 1254 1254">
+        <g transform="translate(0,1254) scale(0.1,-0.1)">
+          <path d={mark} fill="currentColor" />
+        </g>
+      </svg>
+      <text
+        x="71"
+        y="21"
+        fill="currentColor"
+        dominant-baseline="central"
+        font-size="34"
+        font-weight="800"
+        letter-spacing="-0.5"
+      >
+        nextcode
+      </text>
     </svg>
   )
 }
