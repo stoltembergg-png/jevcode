@@ -353,7 +353,7 @@ jobs:
             gh release create "$TAG" --repo "${{ github.repository }}" --title "$TAG" --notes "NextCode $TAG" $TARGET
           fi
           # Only the platform bundles and the merged feed: the sidecar artifact is internal.
-          find artifacts/tauri-release-* -type f \( -name "*.exe" -o -name "*.dmg" -o -name "*.sig" \) -print0 |
+          find artifacts/tauri-release-* -type f \( -name "*.exe" -o -name "*.dmg" -o -name "*.app.tar.gz" -o -name "*.sig" \) -print0 |
             xargs -0 -r gh release upload "$TAG" --clobber --repo "${{ github.repository }}"
           if [ -f artifacts/latest.json ]; then
             gh release upload "$TAG" artifacts/latest.json --clobber --repo "${{ github.repository }}"
