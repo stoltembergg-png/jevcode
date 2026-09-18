@@ -706,6 +706,14 @@ export const dict = {
   "status.popover.tab.lsp": "LSP",
   "status.popover.tab.plugins": "Programtillegg",
   "status.popover.action.manageServers": "Administrer servere",
+  "status.popover.tab.semif": "SemIf",
+  "semif.mode.auto": "Auto",
+  "semif.mode.lazy": "Lazy",
+  "semif.mode.off": "Off",
+  "semif.description.auto": "Loads the local model at NextCode startup",
+  "semif.description.lazy": "Loads the model on the first decision",
+  "semif.description.off": "Plugin disabled",
+  "semif.not_configured": "semif plugin not configured in this project",
 
   "session.share.popover.title": "Publiser på nett",
   "session.share.popover.description.shared":

@@ -1,16 +1,18 @@
 import { Button } from "@opencode-ai/ui/button"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { Icon } from "@opencode-ai/ui/icon"
+import { Select } from "@opencode-ai/ui/select"
 import { Switch } from "@opencode-ai/ui/switch"
 import { Tabs } from "@opencode-ai/ui/tabs"
 import { showToast } from "@/utils/toast"
 import { useNavigate } from "@solidjs/router"
-import { type Accessor, createEffect, createMemo, For, type JSXElement, onCleanup, Show } from "solid-js"
+import { type Accessor, createEffect, createMemo, createSignal, For, type JSXElement, onCleanup, Show } from "solid-js"
 import { createStore } from "solid-js/store"
 import { ServerHealthIndicator, ServerRow } from "@/components/server/server-row"
 import { useLanguage } from "@/context/language"
 import { usePlatform } from "@/context/platform"
 import { ServerConnection, useServer } from "@/context/server"
+import { useSDK } from "@/context/sdk"
 import { useSync } from "@/context/sync"
 import { type ServerHealth } from "@/utils/server-health"
 import { useGlobal } from "@/context/global"
@@ -29,6 +31,16 @@ const pluginEmptyMessage = (value: string, file: string): JSXElement => {
     </>
   )
 }
+
+type SemifMode = "auto" | "lazy" | "off"
+
+const SEMIF_MODES: SemifMode[] = ["auto", "lazy", "off"]
+
+const isSemifMode = (value: unknown): value is SemifMode =>
+  value === "auto" || value === "lazy" || value === "off"
+
+const isSemifSpec = (item: string | [string, Record<string, unknown>]) =>
+  (typeof item === "string" ? item : item[0]).includes("semif")
 
 const listServersByHealth = (
   list: ServerConnection.Any[],
@@ -297,6 +309,49 @@ export function StatusPopoverBody(props: { shown: Accessor<boolean> }) {
   const pluginCount = createMemo(() => plugins().length)
   const pluginEmpty = createMemo(() => pluginEmptyMessage(language.t("dialog.plugins.empty"), "opencode.json"))
 
+  const sdk = useSDK()
+  const [semifPending, setSemifPending] = createSignal(false)
+  const semifIndex = createMemo(() => (sync().data.config.plugin ?? []).findIndex(isSemifSpec))
+  const semifConfigured = createMemo(() => semifIndex() !== -1)
+  const semifEntry = createMemo(() => {
+    const index = semifIndex()
+    return index === -1 ? undefined : sync().data.config.plugin?.[index]
+  })
+  const semifStoredMode = createMemo<SemifMode>(() => {
+    const entry = semifEntry()
+    if (!entry || typeof entry === "string") return "auto"
+    const mode = entry[1]?.mode
+    return isSemifMode(mode) ? mode : "auto"
+  })
+  const [semifOptimistic, setSemifOptimistic] = createSignal<SemifMode | undefined>(undefined)
+  const semifMode = createMemo<SemifMode>(() => semifOptimistic() ?? semifStoredMode())
+  createEffect(() => {
+    const optimistic = semifOptimistic()
+    if (optimistic && semifStoredMode() === optimistic) setSemifOptimistic(undefined)
+  })
+  const setSemifMode = async (mode: SemifMode) => {
+    if (semifPending() || mode === semifMode()) return
+    const index = semifIndex()
+    if (index === -1) return
+    const plugin = sync().data.config.plugin ?? []
+    const entry = plugin[index]
+    const spec = typeof entry === "string" ? entry : entry[0]
+    const options = typeof entry === "string" ? {} : entry[1]
+    const next = plugin.map((item, i) =>
+      i === index ? ([spec, { ...options, mode }] as [string, Record<string, unknown>]) : item,
+    )
+    setSemifOptimistic(mode)
+    setSemifPending(true)
+    try {
+      await sdk().client.config.update({ config: { plugin: next } })
+    } catch (err) {
+      setSemifOptimistic(undefined)
+      fail(err)
+    } finally {
+      setSemifPending(false)
+    }
+  }
+
   return (
     <div class="flex items-center gap-1 w-[360px] rounded-xl shadow-[var(--shadow-lg-border-base)]">
       <Tabs
@@ -321,6 +376,19 @@ export function StatusPopoverBody(props: { shown: Accessor<boolean> }) {
           <Tabs.Trigger value="lsp" data-slot="tab" class="text-12-regular">
             {lspCount() > 0 ? `${lspCount()} ` : ""}
             {language.t("status.popover.tab.lsp")}
+          </Tabs.Trigger>
+          <Tabs.Trigger value="semif" data-slot="tab" class="text-12-regular">
+            <span class="flex items-center gap-1.5">
+              <span
+                classList={{
+                  "size-1.5 rounded-full shrink-0": true,
+                  "bg-icon-success-base": semifConfigured() && semifMode() !== "off",
+                  "bg-border-weak-base": semifConfigured() && semifMode() === "off",
+                  "bg-border-weaker-base": !semifConfigured(),
+                }}
+              />
+              {language.t("status.popover.tab.semif")}
+            </span>
           </Tabs.Trigger>
           <Show when={protocol() === "v1"}>
             <Tabs.Trigger value="plugins" data-slot="tab" class="text-12-regular">
@@ -482,6 +550,44 @@ export function StatusPopoverBody(props: { shown: Accessor<boolean> }) {
                     </div>
                   )}
                 </For>
+              </Show>
+            </div>
+          </div>
+        </Tabs.Content>
+
+        <Tabs.Content value="semif">
+          <div class="flex flex-col px-2 pb-2">
+            <div class="flex flex-col p-3 bg-background-base rounded-sm min-h-14">
+              <Show
+                when={semifConfigured()}
+                fallback={
+                  <div class="text-12-regular text-text-weak my-auto">{language.t("semif.not_configured")}</div>
+                }
+              >
+                <div class="flex items-start justify-between gap-3">
+                  <div class="flex flex-col gap-0.5 min-w-0">
+                    <span class="text-14-regular text-text-base">{language.t("status.popover.tab.semif")}</span>
+                    <span class="text-12-regular text-text-weak">
+                      {language.t(`semif.description.${semifMode()}`)}
+                    </span>
+                  </div>
+                  <Select
+                    data-action="semif-mode"
+                    options={SEMIF_MODES}
+                    current={semifMode()}
+                    value={(mode) => mode}
+                    label={(mode) => language.t(`semif.mode.${mode}`)}
+                    onSelect={(mode) => {
+                      if (mode) void setSemifMode(mode)
+                    }}
+                    variant="secondary"
+                    size="small"
+                    triggerVariant="settings"
+                    triggerStyle={{ "min-width": "120px" }}
+                    triggerProps={{ "aria-label": language.t("status.popover.tab.semif") }}
+                    disabled={semifPending()}
+                  />
+                </div>
               </Show>
             </div>
           </div>
