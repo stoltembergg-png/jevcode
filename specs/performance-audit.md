@@ -158,14 +158,15 @@ app. On a stale cache the first request also waits for the fetch above.
 | Serve a compact provider/model projection for the bootstrap, with details on demand | H | M | M |
 | Do not let the first provider request block on a network fetch (serve cache, refresh async) | M | S/M | L |
 | Warm the models cache in the background right after `server ready` | L | S | L |
-| Reconsider the default models source (see flagged decision) | M | S | M |
+| Reconsider the default models source | — | — | — | Decided: keep `models.opencode.ai` (overridable via `OPENCODE_MODELS_URL`) |
 
 ## Flagged decisions (need your call, not mechanical fixes)
 
-1. **`https://models.opencode.ai` is still the runtime default** (`packages/core/src/models-dev.ts:160`,
-   and `packages/ui/vite.config.ts:48` for the web build). It is a *service*, not a label: it is upstream's
-   models.dev proxy. Pointing it at the public `https://models.dev/api.json` may change the metadata
-   (pricing/limits), so this is a functional decision rather than a rename.
+1. **`https://models.opencode.ai` stays as the runtime default** (`packages/core/src/models-dev.ts:160`,
+   and `packages/ui/vite.config.ts:48` for the web build). It is a *service*, not a label — upstream's
+   models.dev proxy — and pointing it at the public `https://models.dev/api.json` could change the
+   metadata (pricing/limits). **Decided: keep the current default** (2026-09-18); the URL is still
+   overridable through `OPENCODE_MODELS_URL`.
 2. **`OPENCODE_MODELS_URL` / `OPENCODE_*` env names** remain the configuration surface (kept deliberately
    during the rebrand); aliasing them to `NEXTCODE_*` is a small, cheap follow-up if you want it.
 
