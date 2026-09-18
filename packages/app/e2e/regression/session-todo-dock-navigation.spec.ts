@@ -1,9 +1,9 @@
 import { base64Encode } from "@opencode-ai/core/util/encode"
 import { expect, test, type Page } from "@playwright/test"
-import { mockOpenCodeServer } from "../utils/mock-server"
+import { mockNextCodeServer } from "../utils/mock-server"
 import { expectSessionTitle } from "../utils/waits"
 
-const directory = "C:/OpenCode/TodoDockNavigation"
+const directory = "C:/NextCode/TodoDockNavigation"
 const projectID = "proj_todo_dock_navigation"
 const sourceID = "ses_todo_dock_source"
 const otherID = "ses_todo_dock_other"
@@ -29,7 +29,7 @@ test("animates todo lifecycle without replaying it across session tabs", async (
   const todos: Record<string, typeof activeTodos> = { [sourceID]: [], [otherID]: [] }
   const sessionStatus: Record<string, { type: "busy" | "idle" }> = {}
 
-  await mockOpenCodeServer(page, {
+  await mockNextCodeServer(page, {
     directory,
     project: {
       id: projectID,
@@ -43,7 +43,7 @@ test("animates todo lifecycle without replaying it across session tabs", async (
       all: [
         {
           id: "opencode",
-          name: "OpenCode",
+          name: "NextCode",
           models: {
             "claude-opus-4-6": {
               id: "claude-opus-4-6",

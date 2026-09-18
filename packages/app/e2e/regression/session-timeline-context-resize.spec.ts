@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test"
-import { mockOpenCodeServer } from "../utils/mock-server"
+import { mockNextCodeServer } from "../utils/mock-server"
 import { expectAppVisible, expectSessionTitle } from "../utils/waits"
 import {
   analyzeVisualObservations,
@@ -9,7 +9,7 @@ import {
   visualPlan,
 } from "../utils/visual-stability"
 
-const directory = "C:/OpenCode/ContextResizeRegression"
+const directory = "C:/NextCode/ContextResizeRegression"
 const projectID = "proj_context_resize_regression"
 const sessionID = "ses_context_resize_regression"
 const title = "Context resize regression"
@@ -313,7 +313,7 @@ async function mockServer(
   events: { directory: string; payload: Record<string, unknown> }[] = [],
   fixtureMessages = messages,
 ) {
-  await mockOpenCodeServer(page, {
+  await mockNextCodeServer(page, {
     directory,
     project: project(),
     provider: provider(),
@@ -360,7 +360,7 @@ function provider() {
     all: [
       {
         id: "opencode",
-        name: "OpenCode",
+        name: "NextCode",
         models: { "claude-opus-4-6": { id: "claude-opus-4-6", name: "Claude Opus 4.6", limit: { context: 200_000 } } },
       },
     ],

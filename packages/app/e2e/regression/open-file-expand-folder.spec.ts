@@ -1,9 +1,9 @@
 import { base64Encode } from "@opencode-ai/core/util/encode"
 import { expect, test } from "@playwright/test"
-import { mockOpenCodeServer } from "../utils/mock-server"
+import { mockNextCodeServer } from "../utils/mock-server"
 import { expectSessionTitle } from "../utils/waits"
 
-const directory = "C:/OpenCode/OpenFileExpand"
+const directory = "C:/NextCode/OpenFileExpand"
 const projectID = "proj_open_file_expand"
 const sessionID = "ses_open_file_expand"
 const title = "Open file expand"
@@ -12,7 +12,7 @@ const server = `http://${process.env.PLAYWRIGHT_SERVER_HOST ?? "127.0.0.1"}:${pr
 test.use({ viewport: { width: 1440, height: 900 } })
 
 test("expands a folder whose path has a trailing Windows separator", async ({ page }) => {
-  await mockOpenCodeServer(page, {
+  await mockNextCodeServer(page, {
     directory,
     project: {
       id: projectID,
@@ -26,7 +26,7 @@ test("expands a folder whose path has a trailing Windows separator", async ({ pa
       all: [
         {
           id: "opencode",
-          name: "OpenCode",
+          name: "NextCode",
           models: { test: { id: "test", name: "Test", limit: { context: 200_000 } } },
         },
       ],

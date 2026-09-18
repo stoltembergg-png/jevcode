@@ -1,6 +1,5 @@
 {
-  "$schema": "https://opencode.ai/desktop-theme.json",
-  "name": "OpenCode",
+  "name": "NextCode",
   "id": "opencode",
   "light": {
     "palette": {

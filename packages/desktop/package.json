@@ -4,10 +4,9 @@
   "version": "1.18.31",
   "type": "module",
   "license": "MIT",
-  "homepage": "https://opencode.ai",
+  "homepage": "https://github.com/stoltembergg-png/nextcode",
   "author": {
-    "name": "OpenCode",
-    "email": "hello@opencode.ai"
+    "name": "NextCode"
   },
   "scripts": {
     "typecheck": "tsgo -b",

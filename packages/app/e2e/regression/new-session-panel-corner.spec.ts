@@ -1,9 +1,9 @@
 import { expect, test } from "@playwright/test"
-import { mockOpenCodeServer } from "../utils/mock-server"
+import { mockNextCodeServer } from "../utils/mock-server"
 import { expectAppVisible } from "../utils/waits"
 
 const draftID = "draft_new_session_panel_corner"
-const directory = "C:/OpenCode/NewSessionPanelCorner"
+const directory = "C:/NextCode/NewSessionPanelCorner"
 const server = `http://${process.env.PLAYWRIGHT_SERVER_HOST ?? "127.0.0.1"}:${process.env.PLAYWRIGHT_SERVER_PORT ?? "4096"}`
 
 test.use({
@@ -12,7 +12,7 @@ test.use({
 })
 
 test("matches the rounded panel corners to the dark new-session background", async ({ page }, testInfo) => {
-  await mockOpenCodeServer(page, {
+  await mockNextCodeServer(page, {
     directory,
     project: {
       id: "proj_new_session_panel_corner",

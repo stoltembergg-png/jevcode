@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test"
 import type { Page } from "@playwright/test"
 import { fixture, pageMessages } from "../smoke/session-timeline.fixture"
-import { mockOpenCodeServer } from "../utils/mock-server"
+import { mockNextCodeServer } from "../utils/mock-server"
 import { expectAppVisible } from "../utils/waits"
 
 const NAMES = ["alpha-service", "bravo-web", "charlie-api", "delta-tools", "echo-infra", "foxtrot-docs"]
@@ -17,7 +17,7 @@ const rows = (page: Page) => page.locator("[data-directory-path]")
 const row = (page: Page, name: string) => page.locator(`[data-directory-path*="${name}"]`)
 
 async function openProjectDialog(page: Page) {
-  await mockOpenCodeServer(page, {
+  await mockNextCodeServer(page, {
     sessions: fixture.sessions,
     provider: fixture.provider,
     directory: fixture.directory,

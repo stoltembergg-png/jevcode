@@ -1,10 +1,10 @@
 import { expect, test } from "@playwright/test"
 import { fixture, pageMessages } from "../smoke/session-timeline.fixture"
-import { mockOpenCodeServer } from "../utils/mock-server"
+import { mockNextCodeServer } from "../utils/mock-server"
 
 test.beforeEach(async ({ page }) => {
   const sessions = fixture.sessions.map((session) => ({ ...session }))
-  await mockOpenCodeServer(page, {
+  await mockNextCodeServer(page, {
     protocol: "v1",
     sessions,
     provider: fixture.provider,

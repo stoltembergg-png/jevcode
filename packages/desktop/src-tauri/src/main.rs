@@ -1331,8 +1331,8 @@ fn run_menu_action(app: &AppHandle, action: &str) {
 // ---------------------------------------------------------------------------
 // Debug log export (parity with packages/desktop/src/main/logging.ts)
 //
-// Zips the shell log dir plus the opencode server log roots into
-// `<downloads>/opencode-debug-<stamp>.zip`. Debug builds write a fixed temp
+// Zips the shell log dir plus the bundled server log roots into
+// `<downloads>/nextcode-debug-<stamp>.zip`. Debug builds write a fixed temp
 // file so self-tests stay tidy. Entries from the last 24h and under 50 MB are
 // included; heapsnapshots are excluded.
 // ---------------------------------------------------------------------------
@@ -1343,11 +1343,11 @@ const MAX_EXPORT_FILE_SIZE: u64 = 50 * 1024 * 1024;
 #[tauri::command]
 fn export_debug_logs(app: AppHandle, reveal: Option<bool>) -> Result<String, String> {
     let output = if cfg!(debug_assertions) {
-        std::env::temp_dir().join("opencode-debug-dev.zip")
+        std::env::temp_dir().join("nextcode-debug-dev.zip")
     } else {
         let downloads = app.path().download_dir().map_err(|error| format!("downloads dir: {error}"))?;
         std::fs::create_dir_all(&downloads).map_err(|error| format!("mkdir: {error}"))?;
-        downloads.join(format!("opencode-debug-{}.zip", chrono::Local::now().format("%Y%m%d%H%M%S")))
+        downloads.join(format!("nextcode-debug-{}.zip", chrono::Local::now().format("%Y%m%d%H%M%S")))
     };
 
     let log_dir = app.path().app_log_dir().map_err(|error| format!("log dir: {error}"))?;

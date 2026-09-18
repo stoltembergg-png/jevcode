@@ -1,9 +1,9 @@
 import { base64Encode } from "@opencode-ai/core/util/encode"
 import { expect, test } from "@playwright/test"
-import { mockOpenCodeServer } from "../utils/mock-server"
+import { mockNextCodeServer } from "../utils/mock-server"
 import { expectSessionTitle } from "../utils/waits"
 
-const directory = "C:/OpenCode/ReviewOpenFile"
+const directory = "C:/NextCode/ReviewOpenFile"
 const projectID = "proj_review_open_file"
 const sessionID = "ses_review_open_file"
 const title = "Review open file"
@@ -13,7 +13,7 @@ test.use({ viewport: { width: 1440, height: 900 } })
 
 test("opens and searches project files inline", async ({ page }) => {
   const searches: { query: string; dirs?: string; limit?: number }[] = []
-  await mockOpenCodeServer(page, {
+  await mockNextCodeServer(page, {
     directory,
     project: {
       id: projectID,
@@ -27,7 +27,7 @@ test("opens and searches project files inline", async ({ page }) => {
       all: [
         {
           id: "opencode",
-          name: "OpenCode",
+          name: "NextCode",
           models: { test: { id: "test", name: "Test", limit: { context: 200_000 } } },
         },
       ],

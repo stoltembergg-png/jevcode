@@ -264,16 +264,13 @@ export async function installWslDistro(name: string, opts?: RunWslOptions) {
   )
 }
 
-export async function installWslOpencode(version: string, distro: string, opts?: RunWslOptions) {
-  return runInteractiveCommand(
-    resolveSystem32Command("wsl.exe"),
-    wslArgs(
-      ["bash", "-lc", `curl -fsSL https://opencode.ai/install | bash -s -- --version ${shellEscape(version)}`],
-      distro,
-    ),
-    withTimeout(opts, DEFAULT_WSL_INSTALL_TIMEOUT_MS),
-    DEFAULT_WSL_INSTALL_TIMEOUT_MS,
-  )
+export async function installWslOpencode(_version: string, distro: string, _opts?: RunWslOptions) {
+  return Promise.resolve({
+    code: 1,
+    signal: null,
+    stdout: "",
+    stderr: nativeT("desktop.wsl.error.installOpencode", { distro }),
+  } satisfies WslCommandResult)
 }
 
 export async function probeWslDistro(name: string, opts?: RunWslOptions): Promise<WslDistroProbe> {
