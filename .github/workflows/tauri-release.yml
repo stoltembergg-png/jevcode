@@ -342,7 +342,7 @@ jobs:
               const type = match ? match[1].toLowerCase() : "";
               if (type === "feat") groups["Features"].push(line);
               else if (type === "fix") groups["Fixes"].push(line);
-              else groups["Other"].push(line);
+              else if (groups["Other"].length < 5) groups["Other"].push(line);
             }
             const out = [];
             for (const [title, items] of Object.entries(groups)) {
