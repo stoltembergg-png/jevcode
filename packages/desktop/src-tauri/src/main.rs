@@ -146,6 +146,48 @@ fn http_health(port: u16, password: &str) -> Result<u16, String> {
         .unwrap_or(0))
 }
 
+/// Resolves the vendored llama-server runtime for the SemIf engine. Returns the
+/// environment pairs to hand to the opencode sidecar, or `None` when the app runs
+/// unbundled (dev), where the engine falls back to its own discovery.
+///
+/// `llama-server` travels as a Tauri `externalBin` (next to the main executable),
+/// while its shared libraries travel as the `semif` resource directory. The
+/// loader needs that directory on its search path: `PATH` on Windows and
+/// `DYLD_FALLBACK_LIBRARY_PATH` on macOS (the vendored dylibs resolve via
+/// `@rpath`, which falls back to that variable).
+fn semif_sidecar_env(app: &AppHandle) -> Option<Vec<(&'static str, String)>> {
+    let server_name = if cfg!(target_os = "windows") {
+        "llama-server.exe"
+    } else {
+        "llama-server"
+    };
+    let server = std::env::current_exe().ok()?.parent()?.join(server_name);
+    if !server.exists() {
+        return None;
+    }
+    let libs = app.path().resource_dir().ok()?.join("semif");
+    if !libs.is_dir() {
+        return None;
+    }
+    let (key, separator) = if cfg!(target_os = "windows") {
+        ("PATH", ";")
+    } else {
+        ("DYLD_FALLBACK_LIBRARY_PATH", ":")
+    };
+    let existing = std::env::var(key).unwrap_or_default();
+    let libs = libs.to_string_lossy().to_string();
+    let value = if existing.is_empty() {
+        libs
+    } else {
+        format!("{libs}{separator}{existing}")
+    };
+    log::info!("[shell] vendored llama-server at {}", server.display());
+    Some(vec![
+        ("NEXTCODE_SEMIF_SERVER_PATH", server.to_string_lossy().to_string()),
+        (key, value),
+    ])
+}
+
 /// Spawns the bundled opencode server as a sidecar and waits until it is healthy.
 /// Runs on a dedicated thread so the window can paint the loading state immediately.
 fn start_sidecar(app: &AppHandle) {
@@ -193,6 +235,10 @@ fn spawn_sidecar(app: &AppHandle, endpoint: Endpoint, attempt: u32) {
                 .env("OPENCODE_SERVER_PASSWORD", endpoint.password.clone());
             let command = match &state_dir {
                 Some(dir) => command.env("XDG_STATE_HOME", dir.to_string_lossy().to_string()),
+                None => command,
+            };
+            let command = match semif_sidecar_env(app) {
+                Some(env) => env.into_iter().fold(command, |command, (key, value)| command.env(key, value)),
                 None => command,
             };
             command.spawn().map_err(|error| format!("spawn: {error}"))

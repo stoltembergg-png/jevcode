@@ -29,7 +29,8 @@
     "active": true,
     "targets": ["nsis"],
     "icon": ["icons/icon.png", "icons/icon.ico", "icons/icon.icns"],
-    "externalBin": ["binaries/opencode-cli"]
+    "externalBin": ["binaries/opencode-cli", "binaries/llama-server"],
+    "resources": ["semif/*", "resources/THIRD_PARTY_NOTICES.md"]
   },
   "plugins": {
     "deep-link": {

@@ -1,0 +1,20 @@
+{
+  "tag": "b11040",
+  "targets": {
+    "x86_64-pc-windows-msvc": {
+      "asset": "llama-b11040-bin-win-cpu-x64.zip",
+      "bytes": 18439226,
+      "sha256": "762bd68fdd59a7dbdda420fbaea2436848c63cf17572e8e6ae58d1411ecef6bf"
+    },
+    "aarch64-apple-darwin": {
+      "asset": "llama-b11040-bin-macos-arm64.tar.gz",
+      "bytes": 11156518,
+      "sha256": "a7805328902b8b9bf639688b1b3631039abdfb5561c7e537aa295c19ff294653"
+    },
+    "x86_64-apple-darwin": {
+      "asset": "llama-b11040-bin-macos-x64.tar.gz",
+      "bytes": 11204932,
+      "sha256": "60b7b18b51cd21eaf1cedc5a2264807ddd3a31266aef27c43603fc4470f3e66c"
+    }
+  }
+}

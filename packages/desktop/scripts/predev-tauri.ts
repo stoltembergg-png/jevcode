@@ -40,6 +40,17 @@ const dest = path.join(destDir, `opencode-cli-${host}${exe}`)
 copyFileSync(source, dest)
 console.log(`sidecar staged: ${dest}`)
 
+// `externalBin` requires the vendored llama-server to exist before `tauri dev`
+// compiles; the shell resolves it from the bundle via NEXTCODE_SEMIF_SERVER_PATH.
+// The fetch script is idempotent and verifies the archive against its lockfile.
+const fetchSemif = path.join(repo, "packages/opencode/script/fetch-semif-server.ts")
+const semif = await $`${process.execPath} ${fetchSemif} --target ${host}`.nothrow()
+process.stdout.write(semif.stdout.toString())
+if (semif.exitCode !== 0) {
+  console.error(semif.stderr.toString())
+  process.exit(1)
+}
+
 // `frontendDist` points at src-tauri/web-dist, which must exist before Tauri
 // compiles. Build the renderer on demand so a plain `cargo build` never fails on
 // a missing path.
