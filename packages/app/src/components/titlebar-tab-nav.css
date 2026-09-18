@@ -9,10 +9,76 @@
   justify-content: center;
 }
 
+/* Register the tab surface colors so hover/press can interpolate smoothly
+   instead of snapping between the base and overlay colors. */
+@property --tab-base {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: transparent;
+}
+
+@property --tab-overlay {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: transparent;
+}
+
 [data-titlebar-tab] {
   --tab-base: var(--v2-background-bg-deep);
   --tab-overlay: transparent;
   background: linear-gradient(var(--tab-overlay), var(--tab-overlay)), var(--tab-base);
+  transition:
+    --tab-base var(--motion-fast) var(--motion-ease-out),
+    --tab-overlay var(--motion-fast) var(--motion-ease-out);
+}
+
+[data-titlebar-tab] [data-slot="tab-link"] {
+  transition: color var(--motion-fast) var(--motion-ease-out);
+}
+
+/* A tab entering the strip grows open and fades in. `backwards` (not forwards)
+   keeps the final transform from overriding the drag/sort inline transform. */
+[data-titlebar-tab-slot] {
+  transform-origin: left center;
+  animation: titlebarTabIn var(--motion-panel) var(--motion-ease-out) backwards;
+}
+
+/* Closing mirrors the entrance: shrink, fade, and lift away while the rest of
+   the strip settles. `forwards` holds the collapsed frame until the row is
+   removed; the slot is inert while it closes, so it never fights dnd-kit. */
+[data-titlebar-tab-slot][data-closing] {
+  pointer-events: none;
+  animation: titlebarTabOut var(--motion-panel) var(--motion-ease-in) forwards;
+}
+
+@keyframes titlebarTabIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.92);
+    max-width: 0;
+    min-width: 0;
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    max-width: 14rem;
+    min-width: 1.75rem;
+  }
+}
+
+@keyframes titlebarTabOut {
+  from {
+    opacity: 1;
+    transform: none;
+    max-width: 14rem;
+    min-width: 1.75rem;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.92);
+    max-width: 0;
+    min-width: 0;
+  }
 }
 
 [data-titlebar-tab]:is(:hover, :has(> [data-slot="tab-link"]:focus-visible)):not([data-state="pressed"]):not(
@@ -146,5 +212,15 @@
     right: auto;
     left: 50%;
     transform: translateX(-50%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-titlebar-tab],
+  [data-titlebar-tab] [data-slot="tab-link"],
+  [data-titlebar-tab-slot],
+  [data-titlebar-tab-slot][data-closing] {
+    transition: none;
+    animation: none;
   }
 }

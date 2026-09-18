@@ -27,6 +27,7 @@ function SessionTabSlot(props: {
   index: () => number
   active: () => boolean
   forceTruncate: boolean
+  closing?: boolean
   session: () => Session | undefined
   fallbackTitle?: string
   onRename: (title: string) => Promise<void>
@@ -49,6 +50,7 @@ function SessionTabSlot(props: {
       data-titlebar-tab-slot
       data-tab-key={props.id}
       data-active={props.active()}
+      data-closing={props.closing ? "" : undefined}
       class="relative flex w-56 min-w-7 max-w-56 flex-shrink"
     >
       <TabNavItem
@@ -76,6 +78,7 @@ function SessionTabEntry(props: {
   index: () => number
   active: () => boolean
   forceTruncate: boolean
+  closing?: boolean
   serverCtx: () => ServerCtx | undefined
   onVisibleChange: (visible: boolean) => void
   onNavigate: (element: HTMLDivElement) => void
@@ -157,6 +160,7 @@ function SessionTabEntry(props: {
         index={props.index}
         active={props.active}
         forceTruncate={props.forceTruncate}
+        closing={props.closing}
         session={session}
         fallbackTitle={persisted()?.title ?? (missingSession() ? language.t("session.tab.unknown") : undefined)}
         onRename={rename}
@@ -172,6 +176,7 @@ function DraftTabSlot(props: {
   id: string
   index: () => number
   active: () => boolean
+  closing?: boolean
   title: string
   onNavigate: (element: HTMLDivElement) => void
   onClose: () => void
@@ -192,6 +197,7 @@ function DraftTabSlot(props: {
       data-titlebar-tab-slot
       data-tab-key={props.id}
       data-active={props.active()}
+      data-closing={props.closing ? "" : undefined}
       class="relative flex w-56 min-w-7 max-w-56 flex-shrink"
     >
       <DraftTabItem
@@ -221,12 +227,26 @@ export function TitlebarTabStrip(props: {
   const global = useGlobal()
   const language = useLanguage()
   const command = useCommand()
+  const tabs = useTabs()
   let scrollRef!: HTMLDivElement
   let listRef!: HTMLDivElement
   let resizeFrame: number | undefined
   const [visibility, setVisibility] = createStore<Record<string, boolean>>({})
   const visibleTabs = createMemo(() => props.tabs.filter((tab) => tab.type === "draft" || visibility[tabKey(tab)]))
   const visibleTabIds = () => visibleTabs().map(tabKey)
+
+  // Closing is owned by the tabs context so every close path (button, context
+  // menu, keybind) gets the same exit phase. The row is marked closing, the CSS
+  // exit runs, and `animationend` hands the actual removal back to the context.
+  const isClosing = (key: string) => tabs.closing().has(key)
+
+  const handleAnimationEnd = (event: AnimationEvent) => {
+    const target = event.target
+    if (!(target instanceof HTMLElement)) return
+    const key = target.closest("[data-titlebar-tab-slot]")?.getAttribute("data-tab-key")
+    if (!key || !isClosing(key)) return
+    tabs.finishClose(key)
+  }
 
   command.register("titlebar-tab-cycle", () => [
     {
@@ -332,7 +352,12 @@ export function TitlebarTabStrip(props: {
             }
           }}
         >
-          <div data-titlebar-tab-list class="flex w-full min-w-0 flex-row items-center" ref={listRef}>
+          <div
+            data-titlebar-tab-list
+            class="flex w-full min-w-0 flex-row items-center"
+            ref={listRef}
+            onAnimationEnd={handleAnimationEnd}
+          >
             <For each={props.tabs}>
               {(tab) => {
                 const id = tabKey(tab)
@@ -353,6 +378,7 @@ export function TitlebarTabStrip(props: {
                       index={visibleIndex}
                       active={() => props.currentTab() === tab}
                       forceTruncate={props.forceTruncate}
+                      closing={isClosing(id)}
                       serverCtx={serverCtx}
                       onVisibleChange={(visible) => setVisibility(id, visible)}
                       onNavigate={(element) => {
@@ -370,6 +396,7 @@ export function TitlebarTabStrip(props: {
                     id={id}
                     index={visibleIndex}
                     active={() => props.currentTab() === tab}
+                    closing={isClosing(id)}
                     title={language.t("command.session.new")}
                     onNavigate={(element) => {
                       ref = element

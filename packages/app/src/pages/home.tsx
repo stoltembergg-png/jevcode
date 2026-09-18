@@ -7,6 +7,7 @@ import { createHomeScrollController } from "./home/home-scroll-controller"
 import { createHomeSessionSearchController } from "./home/home-session-search-controller"
 import { createHomeSessionsController } from "./home/home-sessions-controller"
 import { HomeSessions } from "./home/home-sessions"
+import "./home/home.css"
 
 export function NewHome() {
   const home = createHomeController()
@@ -16,6 +17,7 @@ export function NewHome() {
   const scroll = createHomeScrollController(sessions.data.groups)
   return (
     <div
+      data-component="home-surface"
       class={`
         m-2 min-h-0 flex-1 self-stretch overflow-hidden rounded-[10px]
         bg-v2-background-bg-base shadow-[var(--v2-elevation-raised)]

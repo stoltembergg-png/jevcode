@@ -3,7 +3,7 @@ import { createSimpleContext } from "@opencode-ai/ui/context"
 import { createStore, produce } from "solid-js/store"
 import { Persist, persisted, removePersisted, draftPersistedKeys } from "@/utils/persist"
 import { ServerConnection, useServer } from "./server"
-import { createEffect, getOwner, onCleanup, startTransition } from "solid-js"
+import { createEffect, createSignal, getOwner, onCleanup, startTransition } from "solid-js"
 import { useLocation, useNavigate, useParams } from "@solidjs/router"
 import { usePlatform } from "./platform"
 import { uuid } from "@/utils/uuid"
@@ -73,7 +73,8 @@ export const { use: useTabs, provider: TabsProvider } = createSimpleContext({
     const location = useLocation()
     const memory = createTabMemory(getOwner())
 
-    const closing = new Set<string>()
+    const [closingKeys, setClosingKeys] = createSignal<ReadonlySet<string>>(new Set())
+    const closeTimers = new Map<string, ReturnType<typeof setTimeout>>()
     let recentWrite = 0
     let recentValue: string | undefined
 
@@ -158,7 +159,6 @@ export const { use: useTabs, provider: TabsProvider } = createSimpleContext({
       const key = tabKey(tab)
       const draftID = tab.type === "draft" ? tab.draftID : undefined
       const nextTab = nextTabAfterClose(store, index, recentKey() === key && location.pathname !== "/")
-      closing.add(key)
       void startTransition(() => {
         setStore(
           produce((tabs) => {
@@ -170,11 +170,56 @@ export const { use: useTabs, provider: TabsProvider } = createSimpleContext({
           navigate("/")
         }
         if (nextTab) navigateTab(nextTab)
-      }).finally(() => closing.delete(key))
+      })
       memory.remove(key)
       removeInfo(key)
       if (draftID) removeDraftPersisted(draftID)
     }
+
+    // Closing gets an exit phase: the row is marked closing, the strip animates
+    // it out, and only then is the tab actually removed. `finishClose` is called
+    // on the row's animationend (token-timed); the timer is a safety net.
+    const reducedMotion = () =>
+      typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches
+
+    const markClosing = (key: string) => setClosingKeys((prev) => new Set(prev).add(key))
+    const clearClosing = (key: string) =>
+      setClosingKeys((prev) => {
+        if (!prev.has(key)) return prev
+        const next = new Set(prev)
+        next.delete(key)
+        return next
+      })
+
+    const finalizeClose = (key: string) => {
+      const timer = closeTimers.get(key)
+      if (timer !== undefined) {
+        clearTimeout(timer)
+        closeTimers.delete(key)
+      }
+      const index = store.findIndex((tab) => tabKey(tab) === key)
+      if (index === -1) {
+        clearClosing(key)
+        return
+      }
+      const tab = store[index]!
+      if (tab.type === "session") updateClosed((stack) => pushClosedTab(stack, tab, index))
+      removeTab(index)
+    }
+
+    // Keep the closing flag until the row has actually left the list, so the
+    // exit animation is never swapped back for the entrance mid-close.
+    createEffect(() => {
+      const keys = new Set(store.map(tabKey))
+      for (const key of closingKeys()) {
+        if (!keys.has(key)) clearClosing(key)
+      }
+    })
+
+    onCleanup(() => {
+      for (const timer of closeTimers.values()) clearTimeout(timer)
+      closeTimers.clear()
+    })
 
     const actions = {
       addSessionTab: (tab: Omit<SessionTab, "type">) => {
@@ -253,9 +298,23 @@ export const { use: useTabs, provider: TabsProvider } = createSimpleContext({
       closeTab(index: number) {
         const tab = store[index]
         if (!tab) return
-        if (tab.type === "session") updateClosed((stack) => pushClosedTab(stack, tab, index))
-        removeTab(index)
+        const key = tabKey(tab)
+        if (closingKeys().has(key)) return
+        if (reducedMotion()) {
+          if (tab.type === "session") updateClosed((stack) => pushClosedTab(stack, tab, index))
+          removeTab(index)
+          return
+        }
+        markClosing(key)
+        closeTimers.set(
+          key,
+          setTimeout(() => finalizeClose(key), 450),
+        )
       },
+      finishClose(key: string) {
+        finalizeClose(key)
+      },
+      closing: closingKeys,
       reopenClosedTab() {
         if (!closedReady()) {
           void closedReady.promise?.then(() => actions.reopenClosedTab())

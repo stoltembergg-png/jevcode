@@ -1,0 +1,22 @@
+/* Home surface entrance. Closing the last conversation navigates here, so the
+   surface fades and rises in instead of replacing the session with a hard cut. */
+[data-component="home-surface"] {
+  animation: homeSurfaceIn var(--motion-panel) var(--motion-ease-out) backwards;
+}
+
+@keyframes homeSurfaceIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-component="home-surface"] {
+    animation: none;
+  }
+}
