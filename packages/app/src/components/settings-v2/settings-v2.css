@@ -727,3 +727,129 @@
   line-height: 1;
   color: var(--v2-state-fg-danger);
 }
+
+.settings-v2-storage-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.settings-v2-storage-size {
+  font-size: 15px;
+  font-weight: 530;
+  line-height: 1;
+  color: var(--v2-text-text-base);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings:
+    "tnum" on,
+    "lnum" on;
+}
+
+.settings-v2-storage-empty {
+  font-size: 13px;
+  font-weight: 440;
+  line-height: 1;
+  color: var(--v2-text-text-faint);
+}
+
+.settings-v2-storage-tables {
+  display: flex;
+  width: 260px;
+  max-width: 100%;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.settings-v2-storage-table {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 12px;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings:
+    "tnum" on,
+    "lnum" on;
+}
+
+.settings-v2-storage-table-name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--v2-text-text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-v2-storage-table-size {
+  flex-shrink: 0;
+  color: var(--v2-text-text-base);
+}
+
+.settings-v2-storage-meta {
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 440;
+  line-height: 16px;
+  color: var(--v2-text-text-faint);
+}
+
+.settings-v2-storage-result {
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 440;
+  line-height: 16px;
+  color: var(--v2-state-fg-success);
+}
+
+.settings-v2-storage-error {
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 440;
+  line-height: 16px;
+  color: var(--v2-state-fg-danger);
+}
+
+.settings-v2-storage-value [data-component="icon-button-v2"] {
+  transition: transform var(--motion-fast) var(--motion-ease-out);
+}
+
+.settings-v2-storage-value [data-component="icon-button-v2"]:active:not(:disabled) {
+  transform: rotate(-120deg);
+}
+
+@keyframes settings-v2-storage-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .settings-v2-storage-size,
+  .settings-v2-storage-table,
+  .settings-v2-storage-result {
+    animation: settings-v2-storage-reveal var(--motion-panel) var(--motion-ease-out) both;
+  }
+
+  .settings-v2-storage-table:nth-child(2) {
+    animation-delay: calc(var(--motion-fast) / 4);
+  }
+
+  .settings-v2-storage-table:nth-child(3) {
+    animation-delay: calc(var(--motion-fast) / 2);
+  }
+
+  .settings-v2-storage-table:nth-child(4) {
+    animation-delay: calc(var(--motion-fast) * 0.75);
+  }
+
+  .settings-v2-storage-table:nth-child(5) {
+    animation-delay: var(--motion-fast);
+  }
+}
+

@@ -39,6 +39,7 @@ export interface Settings {
     agentVisibilityInitialized?: boolean
     newInterfaceNoticeDismissed?: boolean
     shouldDisplayTabsToast?: boolean
+    lastDbCompactAt?: number
   }
   appearance: {
     fontSize: number
@@ -450,6 +451,10 @@ export const { use: useSettings, provider: SettingsProvider } = createSimpleCont
         shouldDisplayTabsToast: withFallback(() => store.general?.shouldDisplayTabsToast, false),
         dismissTabsToast() {
           setStore("general", "shouldDisplayTabsToast", false)
+        },
+        lastDbCompactAt: () => store.general?.lastDbCompactAt,
+        setLastDbCompactAt(value: number) {
+          setStore("general", "lastDbCompactAt", value)
         },
       },
       visibility: {

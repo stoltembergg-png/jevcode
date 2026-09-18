@@ -3,6 +3,19 @@ import { dict as en } from "./en"
 type Keys = keyof typeof en
 
 export const dict = {
+"settings.general.section.storage": "Storage",
+"settings.general.storage.database.title": "Database size",
+"settings.general.storage.database.description": "Disk space used by the server database",
+"settings.general.storage.tables.title": "Largest tables",
+"settings.general.storage.tables.description": "Space used by each table in the database",
+"settings.general.storage.compact.title": "Compact database",
+"settings.general.storage.compact.description": "Remove unused data and reclaim disk space",
+"settings.general.storage.compact.action": "Compact now",
+"settings.general.storage.compact.running": "Compacting…",
+"settings.general.storage.compact.last": "Last compacted {{date}}",
+"settings.general.storage.compact.never": "Never compacted",
+"settings.general.storage.compact.result": "Database is now {{size}}",
+"settings.general.storage.refresh": "Refresh storage information",
   "command.category.suggested": "Vorgeschlagen",
   "command.category.view": "Ansicht",
   "command.category.project": "Projekt",
