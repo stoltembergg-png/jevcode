@@ -652,6 +652,8 @@ function ChannelIndicator(props: { debugTools?: { visible: boolean; toggle: () =
   if (!import.meta.env.DEV) return <></>
 
   const channel = import.meta.env.VITE_OPENCODE_CHANNEL
+  if (channel === undefined) return <></>
+
   if (channel === "dev" && props.debugTools) {
     return (
       <button
