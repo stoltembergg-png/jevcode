@@ -1,7 +1,6 @@
 import { Button } from "@opencode-ai/ui/button"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { Icon } from "@opencode-ai/ui/icon"
-import { Select } from "@opencode-ai/ui/select"
 import { Switch } from "@opencode-ai/ui/switch"
 import { Tabs } from "@opencode-ai/ui/tabs"
 import { showToast } from "@/utils/toast"
@@ -564,29 +563,42 @@ export function StatusPopoverBody(props: { shown: Accessor<boolean> }) {
                   <div class="text-12-regular text-text-weak my-auto">{language.t("semif.not_configured")}</div>
                 }
               >
-                <div class="flex items-start justify-between gap-3">
+                <div class="flex flex-col gap-3">
                   <div class="flex flex-col gap-0.5 min-w-0">
                     <span class="text-14-regular text-text-base">{language.t("status.popover.tab.semif")}</span>
                     <span class="text-12-regular text-text-weak">
                       {language.t(`semif.description.${semifMode()}`)}
                     </span>
                   </div>
-                  <Select
+                  <div
                     data-action="semif-mode"
-                    options={SEMIF_MODES}
-                    current={semifMode()}
-                    value={(mode) => mode}
-                    label={(mode) => language.t(`semif.mode.${mode}`)}
-                    onSelect={(mode) => {
-                      if (mode) void setSemifMode(mode)
-                    }}
-                    variant="secondary"
-                    size="small"
-                    triggerVariant="settings"
-                    triggerStyle={{ "min-width": "120px" }}
-                    triggerProps={{ "aria-label": language.t("status.popover.tab.semif") }}
-                    disabled={semifPending()}
-                  />
+                    role="group"
+                    aria-label={language.t("status.popover.tab.semif")}
+                    class="flex items-center gap-0.5 p-0.5 rounded-md bg-surface-inset-base"
+                  >
+                    <For each={SEMIF_MODES}>
+                      {(mode) => {
+                        const selected = () => semifMode() === mode
+                        return (
+                          <button
+                            type="button"
+                            aria-pressed={selected()}
+                            disabled={semifPending()}
+                            class="inline-flex flex-1 min-w-0 items-center justify-center h-6 px-2 rounded-sm text-12-regular transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-border-focus disabled:cursor-not-allowed disabled:opacity-50"
+                            classList={{
+                              "bg-button-secondary-base text-text-strong shadow-[var(--shadow-xs-border-base)]":
+                                selected(),
+                              "text-text-weak hover:text-text-base hover:bg-surface-inset-base-hover":
+                                !selected() && !semifPending(),
+                            }}
+                            onClick={() => void setSemifMode(mode)}
+                          >
+                            <span class="min-w-0 truncate">{language.t(`semif.mode.${mode}`)}</span>
+                          </button>
+                        )
+                      }}
+                    </For>
+                  </div>
                 </div>
               </Show>
             </div>
