@@ -1,8 +1,6 @@
 <p align="center">
-  <img src="packages/identity/mark.svg" width="88" alt="NextCode" />
+  <img src="packages/identity/wordmark.png" width="88" alt="NextCode" />
 </p>
-
-<h1 align="center">NextCode</h1>
 
 <p align="center">Desktop AI coding agent for Windows and macOS.</p>
 
