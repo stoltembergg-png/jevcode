@@ -1,0 +1,18 @@
+[data-component="wordmark-v2"] {
+  display: block;
+  /* The source canvas is 2172x724, but the wordmark itself only fills
+     1894x324. Matching that inner ratio lets object-fit crop the fully
+     transparent padding, so the rendered height stays close to the old
+     720x129 wordmark instead of the full 3:1 canvas. */
+  aspect-ratio: 1894 / 324;
+  object-fit: cover;
+  object-position: center;
+  user-select: none;
+  -webkit-user-drag: none;
+  /* The asset is light-on-transparent, so invert it on light backgrounds. */
+  filter: invert(1);
+}
+
+[data-color-scheme="dark"] [data-component="wordmark-v2"] {
+  filter: none;
+}
