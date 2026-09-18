@@ -89,7 +89,7 @@ export function parseTranslationArgs(args: string[]) {
     options: {
       concurrency: { type: "string", short: "c", default: "4" },
       model: { type: "string", default: "opencode/gpt-5.5" },
-      variant: { type: "string", default: "xhigh" },
+      variant: { type: "string" },
       "dry-run": { type: "boolean", default: false },
       check: { type: "boolean", default: false },
       help: { type: "boolean", short: "h", default: false },
@@ -280,7 +280,7 @@ Examples:
   const targets = pending.flatMap((plan) => plan.domains.map((domain) => domain.target))
   const baseline = await worktreeSnapshot()
   const variant = await resolveModelVariant(options.model, options.variant)
-  console.log(`Resolved ${options.model} (${options.variant}): ${JSON.stringify(variant)}`)
+  console.log(`Resolved ${options.model} (${variant ?? "default"}): ${JSON.stringify(variant)}`)
   const template = await commandTemplate()
   const results = await runPool(pending, options.concurrency, (plan) =>
     translate(plan, template, options.model, options.variant).catch((error) => ({
@@ -391,7 +391,7 @@ async function translate(
   plan: { locale: Locale; language: string; domains: Domain[] },
   template: string,
   model: string,
-  variant: string,
+  variant?: string,
 ) {
   const glossary = glossaryFile(plan.locale)
   const glossaryContent = (await Bun.file(path.join(root, glossary)).exists())
@@ -436,8 +436,7 @@ async function translate(
       agent,
       "--model",
       model,
-      "--variant",
-      variant,
+      ...(variant ? ["--variant", variant] : []),
       "--title",
       `Translate app ${plan.locale}`,
       "--format",
@@ -476,13 +475,13 @@ async function translate(
 
   const session: unknown = JSON.parse(exportResult[0])
   const observed = sessionModels(session)
-  const mismatch = observed.length === 0 || observed.some((item) => item.model !== model || item.variant !== variant)
+  const mismatch = observed.length === 0 || observed.some((item) => item.model !== model || (item.variant ?? undefined) !== (variant ?? undefined))
   const actual = Array.from(new Set(observed.map((item) => `${item.model} (${item.variant ?? "default"})`))).join(", ")
   return {
     locale: plan.locale,
     stdout: `${textFromEvents(result[0])}\nVerified session model: ${actual}\n`,
     stderr: mismatch
-      ? `Requested ${model} (${variant}), but session used ${actual || "no assistant model"}.\n`
+      ? `Requested ${model} (${variant ?? "default"}), but session used ${actual || "no assistant model"}.\n`
       : result[1],
     code: mismatch ? 1 : 0,
   }
@@ -526,7 +525,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
 }
 
-async function resolveModelVariant(model: string, variant: string) {
+async function resolveModelVariant(model: string, variant?: string) {
   const provider = model.split("/")[0]
   if (!provider || !model.includes("/")) throw new Error(`Model must use provider/model syntax: ${model}`)
   const env = isolatedEnvironment()
@@ -540,7 +539,14 @@ async function resolveModelVariant(model: string, variant: string) {
   })
   const result = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text(), proc.exited])
   if (result[2] !== 0) throw new Error(result[1] || `Unable to resolve model: ${model}`)
-  const variants = modelVariants(result[0], model)
+  let variants: Record<string, unknown> = {}
+  try {
+    variants = modelVariants(result[0], model)
+  } catch {
+    // The model has no configured variants; run it with its own defaults.
+    return undefined
+  }
+  if (variant === undefined) return undefined
   if (!Object.hasOwn(variants, variant)) throw new Error(`Variant '${variant}' is not configured for ${model}.`)
   return variants[variant]
 }
