@@ -161,6 +161,12 @@ function patchJsonc(input: string, patch: unknown, path: string[] = []): string 
   return Object.entries(patch).reduce((result, [key, value]) => patchJsonc(result, value, [...path, key]), input)
 }
 
+function hasJsoncComments(input: string) {
+  // Strip string literals so comment markers inside values are not mistaken for comments.
+  const withoutStrings = input.replace(/"(?:\\.|[^"\\])*"/g, "")
+  return withoutStrings.includes("//") || withoutStrings.includes("/*")
+}
+
 function writable(info: Info) {
   const { plugin_origins: _plugin_origins, ...next } = info
   return next
@@ -635,18 +641,59 @@ const layer = Layer.effect(
       )
     })
 
+    // Resolve the project config file that the loader actually reads, in the same precedence order as
+    // `loadInstanceState`: project `.opencode` directories (and OPENCODE_CONFIG_DIR) first, then existing
+    // ancestor `opencode.json(c)` files, and finally a fresh `<worktree>/.opencode/opencode.jsonc`.
+    const projectConfigTarget = Effect.fnUntraced(function* () {
+      const ctx = yield* InstanceState.context
+
+      const directories = yield* ConfigPaths.directories(ctx.directory, ctx.worktree).pipe(
+        Effect.provideService(FSUtil.Service, fs),
+        Effect.orDie,
+      )
+      for (const dir of directories) {
+        if (dir !== Flag.OPENCODE_CONFIG_DIR && !dir.endsWith(".opencode")) continue
+        // `~/.opencode` is not a project config; only patch dirs inside this project or explicitly
+        // selected via OPENCODE_CONFIG_DIR.
+        if (dir !== Flag.OPENCODE_CONFIG_DIR && !containsPath(dir, ctx)) continue
+        const [json, jsonc] = ConfigPaths.fileInDirectory(dir, "opencode")
+        // Prefer `.jsonc` when both exist so comments in the live config can be preserved.
+        if (yield* fs.existsSafe(jsonc)) return jsonc
+        if (yield* fs.existsSafe(json)) return json
+      }
+
+      const files = yield* ConfigPaths.files("opencode", ctx.directory, ctx.worktree).pipe(
+        Effect.provideService(FSUtil.Service, fs),
+        Effect.orDie,
+      )
+      // `ConfigPaths.files` is ordered root-first (nearest last); the loader merges in that order,
+      // so the nearest existing ancestor file is the one that wins.
+      const nearest = files.at(-1)
+      if (nearest) return nearest
+
+      const base = ctx.worktree && ctx.worktree !== "/" ? ctx.worktree : ctx.directory
+      return path.join(base, ".opencode", "opencode.jsonc")
+    })
+
     const update = Effect.fn("Config.update")(function* (config: Info) {
-      const dir = yield* InstanceState.directory
-      const file = path.join(dir, "config.json")
-      const existing = yield* loadFile(file)
-      const text = yield* readConfigFile(file)
-      const original = text ? ConfigParse.jsonc(text, file) : writable(existing)
-      yield* fs
-        .writeFileString(
-          file,
-          JSON.stringify(mergeDeep(isRecord(original) ? original : writable(existing), writable(config)), null, 2),
-        )
-        .pipe(Effect.orDie)
+      const file = yield* projectConfigTarget()
+      const patch = writable(config)
+      const before = (yield* readConfigFile(file)) ?? ""
+
+      if (file.endsWith(".jsonc") || hasJsoncComments(before)) {
+        const existing = before || "{}"
+        const updated = patchJsonc(existing, patch)
+        yield* decodeConfig(ConfigParse.jsonc(updated, file), file)
+        if (updated !== existing) yield* fs.writeWithDirs(file, updated).pipe(Effect.orDie)
+        return
+      }
+
+      const existing = before ? ConfigParse.jsonc(before, file) : {}
+      ConfigParse.schema(ConfigV1.Info, ConfigV2Compat.lower(normalizeLoadedConfig(existing), file).value, file)
+      const merged = mergeDeep(isRecord(existing) ? existing : {}, patch)
+      const serialized = JSON.stringify(merged, null, 2)
+      yield* decodeConfig(merged, file)
+      if (serialized !== before) yield* fs.writeWithDirs(file, serialized).pipe(Effect.orDie)
     })
 
     const invalidate = Effect.fn("Config.invalidate")(function* () {
