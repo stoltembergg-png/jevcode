@@ -96,11 +96,17 @@ jobs:
         run: |
           set -euo pipefail
           if [ "$RUNNER_OS" = "Windows" ]; then
-            # Bun's patched-dependency cache rename fails with ENOTEMPTY on Windows
-            # (oven-sh/bun#28147). A cache-free install resolved fewer packages than a
-            # normal one, so clear the cache first and then install normally.
-            bun pm cache rm || true
-            bun install --linker hoisted
+            # Bun's patched-dependency cache rename is racy on Windows
+            # (oven-sh/bun#28147, ENOTEMPTY while applying patchfiles), so a cleared
+            # cache plus a bounded retry is the reliable combination.
+            ok=0
+            for attempt in 1 2 3; do
+              bun pm cache rm || true
+              if bun install --linker hoisted; then ok=1; break; fi
+              echo "bun install attempt $attempt failed; retrying"
+              sleep 5
+            done
+            [ "$ok" = "1" ] || exit 1
           else
             bun install
           fi
