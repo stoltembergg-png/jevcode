@@ -293,6 +293,13 @@ jobs:
     permissions:
       contents: write
     steps:
+      # The release job has no checkout of its own; the changelog step needs tags,
+      # so fetch the full history instead of the shallow default.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
       - name: Resolve the release version
         shell: bash
         env:
@@ -304,6 +311,48 @@ jobs:
           else
             echo "TAG=v${INPUT_VERSION:-0.0.0}" >> "$GITHUB_ENV"
           fi
+
+      # Group commit subjects between the previous release tag and $TAG by
+      # conventional-commit type. Never fatal: an empty release-notes.md means
+      # "publish without notes", so every git/node failure is swallowed.
+      - name: Compute the changelog
+        shell: bash
+        run: |
+          set -uo pipefail
+          : > release-notes.md
+          PREV=""
+          if git rev-parse --verify --quiet "${TAG}^{commit}" >/dev/null 2>&1; then
+            PREV=$(git describe --tags --abbrev=0 "${TAG}^" 2>/dev/null || true)
+          fi
+          # No earlier tag (or an unknown dispatch tag): show the last 50 commits.
+          if [ -n "$PREV" ]; then RANGE="${PREV}..${TAG}"; else RANGE="-50"; fi
+          git log --no-merges --format='%s' "$RANGE" > changelog-raw.txt 2>/dev/null || true
+          node -e '
+            const fs = require("fs");
+            const raw = fs.existsSync("changelog-raw.txt") ? fs.readFileSync("changelog-raw.txt", "utf8") : "";
+            const noise = /^(chore(\([^)]*\))?:\s*(release|bump|version)|merge\b|v?\d+\.\d+\.\d+\s*$)/i;
+            const groups = { "Features": [], "Fixes": [], "Other": [] };
+            const seen = new Set();
+            for (const line of raw.split("\n").map((s) => s.trim()).filter(Boolean)) {
+              if (noise.test(line)) continue;
+              const key = line.toLowerCase();
+              if (seen.has(key)) continue;
+              seen.add(key);
+              const match = line.match(/^([a-z]+)(?:\([^)]*\))?!?:\s*/i);
+              const type = match ? match[1].toLowerCase() : "";
+              if (type === "feat") groups["Features"].push(line);
+              else if (type === "fix") groups["Fixes"].push(line);
+              else groups["Other"].push(line);
+            }
+            const out = [];
+            for (const [title, items] of Object.entries(groups)) {
+              if (items.length === 0) continue;
+              out.push(`### ${title}`, ...items.map((item) => `- ${item}`), "");
+            }
+            if (out.length === 0) out.push("No notable changes.");
+            fs.writeFileSync("release-notes.md", out.slice(0, 30).join("\n").trim() + "\n");
+            console.log(fs.readFileSync("release-notes.md", "utf8"));
+          ' || echo "changelog generation failed; publishing without notes"
 
       - uses: actions/download-artifact@v4
         with:
@@ -327,7 +376,9 @@ jobs:
             if (files.length === 0) {
               console.log("no updater fragments (the key was missing): keeping the release without latest.json");
             } else {
-              const merged = { version: "", notes: "", pub_date: new Date().toISOString(), platforms: {} };
+              const notesPath = path.join("..", "release-notes.md");
+              const notes = fs.existsSync(notesPath) ? fs.readFileSync(notesPath, "utf8").trim() : "";
+              const merged = { version: "", notes, pub_date: new Date().toISOString(), platforms: {} };
               for (const file of files) {
                 const fragment = JSON.parse(fs.readFileSync(file, "utf8"));
                 merged.version = merged.version || fragment.version;
@@ -345,12 +396,20 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
+          # Keep the heading, then append the changelog when it was generated.
+          {
+            echo "NextCode $TAG"
+            if [ -s release-notes.md ]; then
+              echo
+              cat release-notes.md
+            fi
+          } > gh-release-body.md
           if gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
-            gh release edit "$TAG" --repo "${{ github.repository }}" --notes "NextCode $TAG"
+            gh release edit "$TAG" --repo "${{ github.repository }}" --notes-file gh-release-body.md
           else
             TARGET=""
             if [ "$GITHUB_REF_TYPE" != "tag" ]; then TARGET="--target=$GITHUB_SHA"; fi
-            gh release create "$TAG" --repo "${{ github.repository }}" --title "$TAG" --notes "NextCode $TAG" $TARGET
+            gh release create "$TAG" --repo "${{ github.repository }}" --title "$TAG" --notes-file gh-release-body.md $TARGET
           fi
           # Only the platform bundles and the merged feed: the sidecar artifact is internal.
           find artifacts/tauri-release-* -type f \( -name "*.exe" -o -name "*.dmg" -o -name "*.app.tar.gz" -o -name "*.sig" \) -print0 |

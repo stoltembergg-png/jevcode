@@ -644,6 +644,11 @@ stdin-EOF shutdown if the server supports it) stays open for P4.
   the per-platform `latest-fragment-*.json` files into the single `latest.json` the updater
   reads and uploads the installers plus the macOS `.app.tar.gz` (the darwin updater
   artifact) with their `.sig` files.
+- The `release` job checks out the tag with full history and builds a compact changelog from
+  the conventional-commit subjects between the previous tag (`git describe --tags --abbrev=0
+  "$TAG^"`; last 50 commits when there is none) and `$TAG`. The same text lands in the GitHub
+  release body (after the `NextCode <tag>` heading) and in `latest.json`'s `notes`, so the
+  in-app updater prompt shows the release notes; any generation failure publishes without notes.
 - Verified end to end: `v0.0.2` published with **both** platforms signed in `latest.json`,
   both asset URLs answer 200, and the installed Windows build reports "Você está
   atualizado" from the real HTTPS feed.
