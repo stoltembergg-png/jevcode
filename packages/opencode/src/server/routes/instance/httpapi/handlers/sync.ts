@@ -16,6 +16,10 @@ import { HttpApiBuilder, HttpApiError } from "effect/unstable/httpapi"
 import { InstanceHttpApi } from "../api"
 import { HistoryPayload, ReplayPayload, SessionPayload } from "../groups/sync"
 
+// Server-side cap for a single history response: clients page incrementally through
+// the payload cursor instead of ever streaming the whole event log at once.
+const SYNC_HISTORY_LIMIT = 10_000
+
 export const syncHandlers = HttpApiBuilder.group(InstanceHttpApi, "sync", (handlers) =>
   Effect.gen(function* () {
     const workspace = yield* Workspace.Service
@@ -80,6 +84,9 @@ export const syncHandlers = HttpApiBuilder.group(InstanceHttpApi, "sync", (handl
             : undefined,
         )
         .orderBy(asc(EventTable.seq))
+        // Server-side cap so an unknown aggregate can never stream the whole event log in
+        // one response; clients continue incrementally with the payload cursor.
+        .limit(SYNC_HISTORY_LIMIT)
         .all()
         .pipe(Effect.orDie)
     })
