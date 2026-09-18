@@ -76,11 +76,16 @@ e.g. `opencode-tauri-shell.db`). Nothing cleans up stale ones (14 MB `opencode-d
 
 | Fix | Impact | Effort | Risk |
 | --- | --- | --- | --- |
-| Bound `SyncHttpApi.history` (limit + cursor) | H | S | L |
+| **Done** — `SyncHttpApi.history` capped at 10,000 events per response, with the incremental cursor documented on the route (`0a4da1a0c7`) | H | S | L |
 | Default `after` to the session's compaction/baseline window where semantics allow | H | M | M |
 | Retention for `event` below a cutoff derived from `admitted_seq`/`promoted_seq`/epoch + one-time compaction | H | M | M |
-| `PRAGMA optimize` on close, periodic `wal_checkpoint(TRUNCATE)` | M | S | L |
+| **Done** — `PRAGMA optimize` at open (`ce86a0ce5f`) plus a 24h maintenance fiber (`wal_checkpoint(TRUNCATE)` + orphan sweep) and `GET /sync/storage` / `POST /sync/compact`, surfaced in Settings as the Storage section (`f83001e9cd`, `32d19b9d7d`, `57c1f30af8`) | M | S | L |
 | Sweep stale `opencode-<channel>.db` files | L | S | L |
+
+Note on the storage endpoints: the per-table breakdown returned by `GET /sync/storage` is always empty
+because the SQLite build the Bun-compiled server links does not expose the `dbstat` virtual table
+(`SQLiteError: no such table: dbstat`). The total file size is reported correctly; a per-table view
+would need a different measurement (e.g. `page_count` heuristics per table or an external tooling path).
 
 ## 2. Startup and bundle
 

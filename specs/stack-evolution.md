@@ -117,12 +117,12 @@ the 1.3 MB onboarding video, which is an eager module import in `help-button.tsx
 | 1 | ~~Windows shell CI job (build + boot + self-tests)~~ **added** (`.github/workflows/tauri-shell-windows.yml`: cross-compiled sidecar + shell boot/assert; first run pending) | CI | H | S/M | L | done |
 | 2 | ~~Wire `check:generated` into CI~~ **added** (`codegen-check.yml`; verified clean — this clone only shows CRLF noise) | protocol | M | S | L | done |
 | 3 | ~~Drop production source maps from the Tauri build~~ **done** (81.9 MB → 35.0 MB) | bundle | M | S | L | done |
-| 4 | Event-log retention + one-time compaction | storage | H | M | M | next |
+| 4 | Event-log retention + one-time compaction | storage | H | M | M | **hygiene half done**: 24h orphan sweep + `wal_checkpoint(TRUNCATE)` + `optimize`, with `GET /sync/storage` and `POST /sync/compact` surfaced in Settings (Storage section). **Temporal retention of live-session events still pending** — needs the `admitted_seq`/`promoted_seq`/epoch invariants worked through. Note: the storage API reports the total file size only; the compiled SQLite has no `dbstat` for a per-table breakdown. |
 | 5 | Stale channel-DB cleanup | storage | L | S | L | next |
 | 6 | Shell panic hook into the exported log | observability | M | S | L | soon |
 | 7 | Isolate `effect/unstable/*` behind adapters | runtime | M | M | M | soon |
 | 8 | Tauri + plugin batch upgrade | shell | — | — | — | **nothing to do now**: 2.x line is current (`tauri 2.11.5`, `cargo update` no-op); next is Tauri 3, currently alpha |
-| 9 | Playwright smoke spec in CI | testing | M | M | M | later |
+| 9 | ~~Playwright smoke spec in CI~~ **done** (the tab-close reproduction spec runs in `app-tests.yml` with chromium; the app unit tests there also run with `--conditions=solid`, and a newer Bun for the solid/ICU behaviour) | testing | M | M | M | done |
 | 10 | `@opencode-ai/*` → NextCode package scope | layout | L | L | M | only if published |
 
 ## Do not do (yet)
