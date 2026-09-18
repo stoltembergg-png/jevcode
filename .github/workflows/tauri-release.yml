@@ -248,13 +248,14 @@ jobs:
           BUNDLE="packages/desktop/src-tauri/target/release/bundle"
           OUT="dist-release"
           mkdir -p "$OUT"
-          find "$BUNDLE" -type f \( -name "*.exe" -o -name "*.dmg" -o -name "*.AppImage" -o -name "*.sig" \) -exec cp {} "$OUT/" \;
+          find "$BUNDLE" -type f \( -name "*.exe" -o -name "*.dmg" -o -name "*.app.tar.gz" -o -name "*.AppImage" -o -name "*.sig" \) -exec cp {} "$OUT/" \;
           ls -l "$OUT"
           PLATFORM_KEY=""
           ARTIFACT=""
           case "$RUNNER_OS" in
             Windows) PLATFORM_KEY="windows-x86_64"; ARTIFACT=$(basename "$(ls "$OUT"/*setup.exe)") ;;
-            macOS) PLATFORM_KEY="darwin-aarch64"; ARTIFACT=$(basename "$(ls "$OUT"/*.dmg)") ;;
+            # The macOS updater consumes the .app.tar.gz (the .dmg is for manual installs).
+            macOS) PLATFORM_KEY="darwin-aarch64"; ARTIFACT=$(basename "$(ls "$OUT"/*.app.tar.gz)") ;;
           esac
           if [ -f "$OUT/${ARTIFACT}.sig" ]; then
             export VERSION PLATFORM_KEY
