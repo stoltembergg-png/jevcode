@@ -547,7 +547,7 @@ export const githubRun = Effect.fn("Cli.github.run")(function* (args: { event?: 
             repoData.data.default_branch,
             branch,
             summary,
-            `${response}\n\nTriggered by ${triggerType}${footer({ image: true })}`,
+            `${response}\n\nTriggered by ${triggerType}${footer()}`,
           )
           if (pr) {
             console.log(`Created PR #${pr}`)
@@ -577,7 +577,10 @@ export const githubRun = Effect.fn("Cli.github.run")(function* (args: { event?: 
             await pushToLocalBranch(summary, uncommittedChanges)
           }
           const hasShared = prData.comments.nodes.some((c) => c.body.includes(`${shareBaseUrl}/s/${shareId}`))
-          await createComment(`${response}${footer({ image: !hasShared })}`)
+          // The hasShared probe only fed the removed social-card embed; the share
+          // link stays in the footer regardless.
+          void hasShared
+          await createComment(`${response}${footer()}`)
           await removeReaction(commentType)
         }
         // Fork PR
@@ -595,7 +598,10 @@ export const githubRun = Effect.fn("Cli.github.run")(function* (args: { event?: 
             await pushToForkBranch(summary, prData, uncommittedChanges)
           }
           const hasShared = prData.comments.nodes.some((c) => c.body.includes(`${shareBaseUrl}/s/${shareId}`))
-          await createComment(`${response}${footer({ image: !hasShared })}`)
+          // The hasShared probe only fed the removed social-card embed; the share
+          // link stays in the footer regardless.
+          void hasShared
+          await createComment(`${response}${footer()}`)
           await removeReaction(commentType)
         }
       }
@@ -610,7 +616,7 @@ export const githubRun = Effect.fn("Cli.github.run")(function* (args: { event?: 
         if (switched) {
           // Agent switched branches (likely created its own branch/PR).
           // Don't push the stale infrastructure branch — just comment.
-          await createComment(`${response}${footer({ image: true })}`)
+          await createComment(`${response}${footer()}`)
           await removeReaction(commentType)
         } else if (dirty) {
           const summary = await summarize(response)
@@ -619,16 +625,16 @@ export const githubRun = Effect.fn("Cli.github.run")(function* (args: { event?: 
             repoData.data.default_branch,
             branch,
             summary,
-            `${response}\n\nCloses #${issueId}${footer({ image: true })}`,
+            `${response}\n\nCloses #${issueId}${footer()}`,
           )
           if (pr) {
-            await createComment(`Created PR #${pr}${footer({ image: true })}`)
+            await createComment(`Created PR #${pr}${footer()}`)
           } else {
-            await createComment(`${response}${footer({ image: true })}`)
+            await createComment(`${response}${footer()}`)
           }
           await removeReaction(commentType)
         } else {
-          await createComment(`${response}${footer({ image: true })}`)
+          await createComment(`${response}${footer()}`)
           await removeReaction(commentType)
         }
       }
@@ -1351,18 +1357,11 @@ export const githubRun = Effect.fn("Cli.github.run")(function* (args: { event?: 
       }
     }
 
-    function footer(opts?: { image?: boolean }) {
-      const image = (() => {
-        if (!shareId) return ""
-        if (!opts?.image) return ""
-
-        const titleAlt = encodeURIComponent(session.title.substring(0, 50))
-        const title64 = Buffer.from(session.title.substring(0, 700), "utf8").toString("base64")
-
-        return `<a href="${shareBaseUrl}/s/${shareId}"><img width="200" alt="${titleAlt}" src="https://social-cards.sst.dev/opencode-share/${title64}.png?model=${providerID}/${modelID}&version=${session.version}&id=${shareId}" /></a>\n`
-      })()
+    // The upstream social-card image service is not part of NextCode, so the footer
+    // keeps only the share link and the github run link.
+    function footer() {
       const shareUrl = shareId ? `[NextCode session](${shareBaseUrl}/s/${shareId})&nbsp;&nbsp;|&nbsp;&nbsp;` : ""
-      return `\n\n${image}${shareUrl}[github run](${runUrl})`
+      return `\n\n${shareUrl}[github run](${runUrl})`
     }
 
     async function fetchRepo() {

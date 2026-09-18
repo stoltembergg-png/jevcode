@@ -1,0 +1,66 @@
+name: app-tests
+
+# Unit tests + typecheck for the renderer packages (packages/app, packages/ui,
+# packages/session-ui) and the tab-close reproduction spec. Runs on Ubuntu with the
+# pinned Bun so drift in copy/i18n/timeline logic surfaces before a release.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [tauri-shell]
+    paths:
+      - "packages/app/**"
+      - "packages/ui/**"
+      - "packages/session-ui/**"
+      - "packages/client/**"
+      - ".github/workflows/app-tests.yml"
+
+concurrency:
+  group: app-tests-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Typecheck
+        run: bun run typecheck
+        working-directory: packages/app
+
+      - name: Typecheck (ui)
+        run: bun run typecheck
+        working-directory: packages/ui
+
+      - name: Typecheck (session-ui)
+        run: bun run typecheck
+        working-directory: packages/session-ui
+
+      - name: Tests
+        run: bun test
+        working-directory: packages/app
+
+      - name: Tests (ui)
+        run: bun test
+        working-directory: packages/ui
+
+      - name: Tests (session-ui)
+        run: bun test
+        working-directory: packages/session-ui
+
+      - name: Install the reproduction spec's browser
+        run: bun x playwright install chromium --with-deps
+        working-directory: packages/app
+
+      - name: Tab close motion (reproduction spec)
+        run: bun x playwright test e2e/reproduction/tab-close-motion.spec.ts --reporter=line
+        working-directory: packages/app
