@@ -11,10 +11,12 @@ import { eq } from "drizzle-orm"
 import { lte } from "drizzle-orm"
 import { not } from "drizzle-orm"
 import { or } from "drizzle-orm"
-import { Effect, Scope } from "effect"
+import { sql } from "drizzle-orm"
+import { sql } from "drizzle-orm"
+import { Duration, Effect, Schedule, Scope } from "effect"
 import { HttpApiBuilder, HttpApiError } from "effect/unstable/httpapi"
 import { InstanceHttpApi } from "../api"
-import { HistoryPayload, ReplayPayload, SessionPayload } from "../groups/sync"
+import { HistoryPayload, ReplayPayload, SessionPayload, StorageStatus, CompactPayload, CompactResponse } from "../groups/sync"
 
 // Server-side cap for a single history response: clients page incrementally through
 // the payload cursor instead of ever streaming the whole event log at once.
@@ -27,6 +29,27 @@ export const syncHandlers = HttpApiBuilder.group(InstanceHttpApi, "sync", (handl
     const scope = yield* Scope.Scope
     const events = yield* EventV2Bridge.Service
     const { db } = yield* Database.Service
+
+    // Server-side storage maintenance: keep the WAL from growing unbounded, refresh the
+    // query planner stats, and remove events for aggregates that no longer have a session.
+    // Runs once shortly after the server is ready, then every 24 hours.
+    const runMaintenance = Effect.fn("SyncHttpApi.maintenance")(function* () {
+      yield* Effect.sleep(Duration.seconds(30))
+      yield* db.run(sql`DELETE FROM event WHERE aggregate_id NOT IN (SELECT id FROM session)`)
+      yield* db.run(sql`DELETE FROM event_sequence WHERE aggregate_id NOT IN (SELECT id FROM session)`)
+      yield* db.run("PRAGMA wal_checkpoint(TRUNCATE)")
+      yield* db.run("PRAGMA optimize")
+    })
+
+    // WAL hygiene at boot, then periodic maintenance in a background fiber.
+    yield* db.run("PRAGMA wal_checkpoint(TRUNCATE)").pipe(Effect.ignore)
+    yield* Effect.forkIn(
+      scope,
+      runMaintenance().pipe(
+        Effect.repeat(Schedule.spaced(Duration.hours(24))),
+        Effect.ignore,
+      ),
+    )
 
     const start = Effect.fn("SyncHttpApi.start")(function* () {
       yield* workspace
@@ -91,6 +114,26 @@ export const syncHandlers = HttpApiBuilder.group(InstanceHttpApi, "sync", (handl
         .pipe(Effect.orDie)
     })
 
-    return handlers.handle("start", start).handle("replay", replay).handle("steal", steal).handle("history", history)
+    const storage = Effect.fn("SyncHttpApi.storage")(function* () {
+      const dbPath = Database.path()
+      const fileBytes = yield* Effect.promise(() => Bun.file(dbPath).size).pipe(Effect.orDie)
+      const tables = yield* db.all<{ name: string; bytes: number }>(
+        sql`SELECT name, SUM(pgsize) AS bytes FROM dbstat GROUP BY name ORDER BY bytes DESC LIMIT 10`,
+      ).pipe(Effect.orDie)
+      return { fileBytes, tables }
+    })
+
+    const compact = Effect.fn("SyncHttpApi.compact")(function* (ctx: { payload: typeof CompactPayload.Type }) {
+      yield* db.run("PRAGMA wal_checkpoint(TRUNCATE)").pipe(Effect.ignore)
+      if (ctx.payload.vacuum) {
+        yield* db.run("VACUUM").pipe(Effect.ignore)
+      }
+      yield* db.run("PRAGMA optimize").pipe(Effect.ignore)
+      const dbPath = Database.path()
+      const fileBytes = yield* Effect.promise(() => Bun.file(dbPath).size).pipe(Effect.orDie)
+      return { fileBytes, done: true }
+    })
+
+    return handlers.handle("start", start).handle("replay", replay).handle("steal", steal).handle("history", history).handle("storage", storage).handle("compact", compact)
   }),
 )

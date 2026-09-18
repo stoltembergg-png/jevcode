@@ -34,12 +34,33 @@ export const HistoryEvent = Schema.Struct({
   type: Schema.String,
   data: Schema.Record(Schema.String, Schema.Unknown),
 })
+export const StorageTable = Schema.Struct({
+  name: Schema.String,
+  bytes: Schema.Number,
+})
+export const StorageStatus = Schema.Struct({
+  fileBytes: Schema.Number,
+  tables: Schema.Array(StorageTable),
+})
+export const CompactPayload = Schema.Struct({
+  vacuum: Schema.optional(Schema.Boolean),
+})
+export const CompactResponse = Schema.Struct({
+  done: Schema.Boolean,
+  fileBytes: Schema.Number,
+})
+export const StoragePaths = {
+  storage: `${root}/storage`,
+  compact: `${root}/compact`,
+} as const
 
 export const SyncPaths = {
   start: `${root}/start`,
   replay: `${root}/replay`,
   steal: `${root}/steal`,
   history: `${root}/history`,
+  storage: `${root}/storage`,
+  compact: `${root}/compact`,
 } as const
 
 export const SyncApi = HttpApi.make("sync")
@@ -91,6 +112,27 @@ export const SyncApi = HttpApi.make("sync")
             summary: "List sync events",
             description:
               "List sync events for all aggregates. Keys are aggregate IDs the client already knows about, values are the last known sequence ID. Events with seq > value are returned for those aggregates. Aggregates not listed in the input get their full history, capped at 10,000 events per response — continue by adding the last known sequences to the payload.",
+          }),
+        ),
+        HttpApiEndpoint.get("storage", SyncPaths.storage, {
+          query: WorkspaceRoutingQuery,
+          success: described(StorageStatus, "Database storage status"),
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "sync.storage.status",
+            summary: "Database storage status",
+            description: "Total file size and per-table breakdown of the server database.",
+          }),
+        ),
+        HttpApiEndpoint.post("compact", SyncPaths.compact, {
+          query: WorkspaceRoutingQuery,
+          payload: CompactPayload,
+          success: described(CompactResponse, "Database compacted"),
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "sync.storage.compact",
+            summary: "Compact database storage",
+            description: "Checkpoint the WAL, remove orphaned events, and optionally run VACUUM to reclaim disk space.",
           }),
         ),
       )
