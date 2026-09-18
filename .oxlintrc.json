@@ -16,7 +16,7 @@
     "no-unused-expressions": "off",
     // Intentional control char matching (ANSI escapes, null byte sanitization)
     "no-control-regex": "off",
-    // SST and plugin tools require triple-slash references
+    // Plugin and tool files require triple-slash references
     "triple-slash-reference": "off",
 
     // Suspicious category: suppress noisy rules

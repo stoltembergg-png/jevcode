@@ -18,6 +18,52 @@ The UI must not be redesigned. `packages/app`, `packages/ui` and
 `packages/session-ui` are out of scope for edits; engine-level rasterization
 differences between WebView2 (Windows) and WKWebView (macOS) are accepted.
 
+## Why Tauri 2 (vs Electron)
+
+Electron ships and runs a full Chromium + Node runtime with the app. Tauri keeps only a
+Rust host and uses the webview already installed on the machine, so the heaviest part of
+the old shell is no longer started — or shipped — at all. That is what the priority order
+above buys.
+
+| | Electron (previous shell) | Tauri 2 (current shell) |
+| --- | --- | --- |
+| Runtime | bundled Chromium + Node (Electron 42), several processes per app | Rust host + OS webview (WebView2 / WKWebView) |
+| Webview updates | shipped with the app | delivered by the operating system |
+| Binary that launches | `electron` | `opencode-desktop` (release build 35 MB, measured) |
+| Installer | electron-builder artifact set | NSIS 56 MB / dmg 58 MB (measured at `v0.0.2`), on top of the same ~180 MB sidecar |
+| Shell IPC | `contextBridge` preload + ~60 IPC channels, Node reachable from the shell | capability-scoped Tauri commands (`src-tauri/capabilities/*.json`), no Node in the webview |
+| Native integration | Electron modules (menus, dialogs, window state, single instance, deep links, updater) | Tauri plugins: `single-instance`, `deep-link`, `dialog`, `opener`, `shell`, `process`, `updater`, `log`, plus `decorum` for the Windows caption buttons |
+| Title bar | `titleBarOverlay` | `decorum` overlay (Windows) and `titleBarStyle: Overlay` with traffic lights (macOS) |
+| Updates | `electron-updater` + `latest.yml` | `tauri-plugin-updater` + minisign-signed `latest.json`, merged for both platforms |
+| Logging | `electron-log` files | `tauri-plugin-log` (stdout + log dir) |
+| Debug-log export | `src/main/logging.ts` zip | `export_debug_logs` command (manifest + shell log + server logs) |
+| Build | electron-vite + electron-builder | `tauri-release.yml` (sidecar cross-compiled on Ubuntu, NSIS + dmg, signed feed) + `tauri-shell-macos.yml` |
+
+What did **not** change: the engine (`packages/opencode`), the domain (`packages/core`),
+the HTTP API (`packages/server`) and the entire UI (`packages/app`, `packages/ui`,
+`packages/session-ui`). The shell is the only thing that moved, which is why parity was a
+checklist instead of a rewrite.
+
+## What was done (summary)
+
+- **P0 — de-risking spikes**: proved the two risky pieces before committing to the
+  migration — a Bun-compiled server sidecar with a working PTY, and Tauri window behavior
+  (frameless zoom, `data-tauri-drag-region`, ACLs) on Windows.
+- **P1 — shell**: Tauri v2 app in `packages/desktop/src-tauri` hosting the real renderer,
+  with a `window.api` shim (`src/renderer/tauri-api.ts`), store, single instance, deep
+  links, sidecar spawn + health + recovery, and Windows kill-on-close job objects.
+- **P2 — feature parity, slice by slice**: pickers/permission tokens/opener; drafts (sqlite
+  + blobs) with window state and crash recovery; native menus + i18n; title bar,
+  background and zoom — each verified against the Electron behavior.
+- **P4 — packaging and release**: NSIS + dmg bundles, `tauri-plugin-log` with
+  `export_debug_logs`, and a release pipeline that cross-compiles the sidecar on Ubuntu and
+  publishes a merged, minisign-signed `latest.json` for both platforms (live at `v0.0.2`).
+- **Cleanup**: the repository was trimmed to the desktop product — dead release/bot
+  scripts, orphaned `sst-env` shims, unused workflows, translated README mirrors and cloud
+  infrastructure leftovers are gone.
+- Still pending: the real install → update → restart cycle on an installed build, macOS
+  orphan hardening, and the removal of the Electron shell.
+
 ## Why this is viable
 
 - **The app already was Tauri v2.** `packages/desktop/src-tauri` existed until
@@ -41,9 +87,10 @@ differences between WebView2 (Windows) and WKWebView (macOS) are accepted.
   `@ghostty/web` (wasm) in the renderer and talks to the local server over
   HTTP/WebSocket. Native PTY (`@lydell/node-pty`) is used only by the Windows
   WSL install flow.
-- **The update feed already exists in Tauri format.** `packages/desktop/scripts/finalize-latest-json.ts`
-  already produces a minisign-signed `latest.json`, and the CI already holds
-  `TAURI_SIGNING_PRIVATE_KEY`. `packages/containers/tauri-linux` also exists.
+- **The update feed already exists in Tauri format.** The Electron shell already produced a
+  minisign-signed `latest.json` (its `scripts/finalize-latest-json.ts` has since been
+  removed; the release workflow builds the merged feed inline), and the CI holds
+  `TAURI_SIGNING_PRIVATE_KEY`.
 
 ## Target architecture
 
@@ -110,8 +157,9 @@ APIs (do not copy code blindly):
 - macOS entitlements (JIT, unsigned executable memory, dyld environment,
   library validation, audio input) and the `Overlay` title bar with
   traffic-light position.
-- Build scripts: `predev`, `prepare`, `copy-bundles`, `finalize-latest-json`,
-  `utils` (sidecar binary table keyed by Rust target triple).
+- Build scripts: `predev` and `utils` (sidecar binary table keyed by Rust target triple);
+  `prepare`, `copy-bundles` and `finalize-latest-json` were removed with the dead-code
+  cleanup — the Tauri pipeline stages the sidecar and builds the feed itself.
 - macOS-only native menu structure and the native i18n delivery flow.
 - `install_cli` / `sync_cli` approach (repo `install` script, `--binary` argument).
 - The `capabilities/default.json` permission list — it already names the ACL entries
@@ -703,7 +751,6 @@ strategy.
   `packages/desktop/src/renderer/index.tsx`.
 - Server artifact: `packages/opencode/script/build.ts` (12 compile targets),
   `packages/opencode/src/node.ts` (`Server.listen`).
-- Update feed: `packages/desktop/scripts/finalize-latest-json.ts`,
-  `.github/workflows/publish.yml` (Azure signing, Apple notarization,
-  `TAURI_SIGNING_PRIVATE_KEY`).
+- Update feed: `.github/workflows/tauri-release.yml` (merged `latest.json`, Azure signing,
+  Apple notarization, `TAURI_SIGNING_PRIVATE_KEY`).
 - Old Tauri data migration (to invert): `packages/desktop/src/main/migrate.ts`.

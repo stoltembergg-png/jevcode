@@ -1,129 +1,87 @@
 <p align="center">
-  <a href="https://opencode.ai">
-    <picture>
-      <source srcset="packages/console/app/src/asset/logo-ornate-dark.svg" media="(prefers-color-scheme: dark)">
-      <source srcset="packages/console/app/src/asset/logo-ornate-light.svg" media="(prefers-color-scheme: light)">
-      <img src="packages/console/app/src/asset/logo-ornate-light.svg" alt="OpenCode logo">
-    </picture>
-  </a>
-</p>
-<p align="center">The open source AI coding agent.</p>
-<p align="center">
-  <a href="https://opencode.ai/discord"><img alt="Discord" src="https://img.shields.io/discord/1391832426048651334?style=flat-square&label=discord" /></a>
-  <a href="https://www.npmjs.com/package/opencode-ai"><img alt="npm" src="https://img.shields.io/npm/v/opencode-ai?style=flat-square" /></a>
-  <a href="https://github.com/anomalyco/opencode/actions/workflows/publish.yml"><img alt="Build status" src="https://img.shields.io/github/actions/workflow/status/anomalyco/opencode/publish.yml?style=flat-square&branch=dev" /></a>
+  <img src="packages/identity/mark.svg" width="88" alt="NextCode" />
 </p>
 
-<p align="center">
-  <a href="README.md">English</a> |
-  <a href="README.zh.md">简体中文</a> |
-  <a href="README.zht.md">繁體中文</a> |
-  <a href="README.ko.md">한국어</a> |
-  <a href="README.de.md">Deutsch</a> |
-  <a href="README.es.md">Español</a> |
-  <a href="README.fr.md">Français</a> |
-  <a href="README.it.md">Italiano</a> |
-  <a href="README.da.md">Dansk</a> |
-  <a href="README.ja.md">日本語</a> |
-  <a href="README.pl.md">Polski</a> |
-  <a href="README.ru.md">Русский</a> |
-  <a href="README.bs.md">Bosanski</a> |
-  <a href="README.ar.md">العربية</a> |
-  <a href="README.no.md">Norsk</a> |
-  <a href="README.br.md">Português (Brasil)</a> |
-  <a href="README.th.md">ไทย</a> |
-  <a href="README.tr.md">Türkçe</a> |
-  <a href="README.uk.md">Українська</a> |
-  <a href="README.bn.md">বাংলা</a> |
-  <a href="README.gr.md">Ελληνικά</a> |
-  <a href="README.vi.md">Tiếng Việt</a>
-</p>
+<h1 align="center">NextCode</h1>
 
-[![OpenCode Terminal UI](packages/web/src/assets/lander/screenshot.png)](https://opencode.ai)
+<p align="center">Desktop AI coding agent for Windows and macOS.</p>
+
+<p align="center">
+  <a href="specs/tauri-migration.md">Tauri 2 shell</a> ·
+  <a href="CONTRIBUTING.md">Contributing</a> ·
+  <a href="SECURITY.md">Security</a>
+</p>
 
 ---
 
-### Installation
+NextCode is a desktop app around the **opencode** engine: sessions, agents, tools and
+terminals in a native window. The shell is [Tauri 2](https://tauri.app) — a Rust host plus
+the operating system webview (WebView2 on Windows, WKWebView on macOS) — while the engine
+and the UI come from the opencode codebase unchanged. The migration from the Electron shell
+is documented in [`specs/tauri-migration.md`](specs/tauri-migration.md).
 
-```bash
-# YOLO
-curl -fsSL https://opencode.ai/install | bash
+## Install
 
-# Package managers
-npm i -g opencode-ai@latest        # or bun/pnpm/yarn
-scoop install opencode             # Windows
-choco install opencode             # Windows
-brew install anomalyco/tap/opencode # macOS and Linux (recommended, always up to date)
-brew install opencode              # macOS and Linux (official brew formula, updated less)
-sudo pacman -S opencode            # Arch Linux (Stable)
-paru -S opencode-bin               # Arch Linux (Latest from AUR)
-mise use -g opencode               # Any OS
-nix run nixpkgs#opencode           # or github:anomalyco/opencode for latest dev branch
+Download the latest installer from
+[Releases](https://github.com/stoltembergg-png/nextcode/releases/latest):
+
+- **Windows 10/11 (x64)** — `OpenCode_<version>_x64-setup.exe` (NSIS, per-user install)
+- **macOS (Apple Silicon)** — `OpenCode_<version>_aarch64.dmg`
+
+The installers are **not code-signed yet**: Windows SmartScreen asks for
+_More info → Run anyway_, and macOS wants right-click → _Open_ (or System Settings →
+Privacy & Security → _Open Anyway_). Application updates are signed and verified end to end.
+
+## Updates
+
+The app checks the release feed on startup and from the menu, and updates in place:
+
+```
+https://github.com/stoltembergg-png/nextcode/releases/latest/download/latest.json
 ```
 
-> [!TIP]
-> Remove versions older than 0.1.x before installing.
+Every artifact is minisign-signed; a tampered or unsigned payload is rejected. CI signs
+with `TAURI_SIGNING_PRIVATE_KEY` + `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`.
 
-### Desktop App (BETA)
+## Build from source
 
-OpenCode is also available as a desktop application. Download directly from the [releases page](https://github.com/anomalyco/opencode/releases) or [opencode.ai/download](https://opencode.ai/download).
-
-| Platform              | Download                           |
-| --------------------- | ---------------------------------- |
-| macOS (Apple Silicon) | `opencode-desktop-mac-arm64.dmg`   |
-| macOS (Intel)         | `opencode-desktop-mac-x64.dmg`     |
-| Windows               | `opencode-desktop-windows-x64.exe` |
-| Linux                 | `.deb`, `.rpm`, or `.AppImage`     |
+Prerequisites: [Bun](https://bun.sh) `1.3.14` (pinned in `packageManager`), Rust stable, and
+the platform toolchain (Visual Studio Build Tools + WebView2 on Windows; Xcode Command Line
+Tools on macOS).
 
 ```bash
-# macOS (Homebrew)
-brew install --cask opencode-desktop
-# Windows (Scoop)
-scoop bucket add extras; scoop install extras/opencode-desktop
+bun install
+
+cd packages/desktop
+bun run predev:tauri   # stages the compiled server sidecar + builds src-tauri/web-dist
+bun run tauri dev      # runs the desktop shell
 ```
 
-#### Installation Directory
+`bun run tauri build` produces the NSIS / dmg bundle, and
+[`.github/workflows/tauri-release.yml`](.github/workflows/tauri-release.yml) builds, signs
+and publishes both platforms from a `v*` tag.
 
-The install script respects the following priority order for the installation path:
+## Repository layout
 
-1. `$OPENCODE_INSTALL_DIR` - Custom installation directory
-2. `$XDG_BIN_DIR` - XDG Base Directory Specification compliant path
-3. `$HOME/bin` - Standard user binary directory (if it exists or can be created)
-4. `$HOME/.opencode/bin` - Default fallback
+| Path | What it is |
+| --- | --- |
+| `packages/desktop` | Desktop shell: Tauri 2 (`src-tauri/`), the `window.api` shim, and the Electron shell kept during the transition |
+| `packages/opencode` | The engine/server that ships as the bundled sidecar (compiled with the pinned Bun) |
+| `packages/app`, `packages/ui`, `packages/session-ui` | The renderer (SolidJS) |
+| `packages/core`, `packages/server`, `packages/schema`, `packages/protocol`, `packages/client` | Session runtime, HTTP API, contracts and generated clients |
+| `specs/` | Design and migration documents |
 
-```bash
-# Examples
-OPENCODE_INSTALL_DIR=/usr/local/bin curl -fsSL https://opencode.ai/install | bash
-XDG_BIN_DIR=$HOME/.local/bin curl -fsSL https://opencode.ai/install | bash
-```
+## Documentation
 
-### Agents
+- [`specs/tauri-migration.md`](specs/tauri-migration.md) — why the shell moved to Tauri 2, the
+  comparison with Electron, and the phase-by-phase record.
+- [`CONTEXT.md`](CONTEXT.md) — session runtime vocabulary (System Context, Session History,
+  Session Drain).
+- [`AGENTS.md`](AGENTS.md) — repository conventions (module shape, Effect rules, dependency
+  direction).
 
-OpenCode includes two built-in agents you can switch between with the `Tab` key.
+## License
 
-- **build** - Default, full-access agent for development work
-- **plan** - Read-only agent for analysis and code exploration
-  - Denies file edits by default
-  - Asks permission before running bash commands
-  - Ideal for exploring unfamiliar codebases or planning changes
-
-Also included is a **general** subagent for complex searches and multistep tasks.
-This is used internally and can be invoked using `@general` in messages.
-
-Learn more about [agents](https://opencode.ai/docs/agents).
-
-### Documentation
-
-For more info on how to configure OpenCode, [**head over to our docs**](https://opencode.ai/docs).
-
-### Contributing
-
-If you're interested in contributing to OpenCode, please read our [contributing docs](./CONTRIBUTING.md) before submitting a pull request.
-
-### Building on OpenCode
-
-If you are working on a project that's related to OpenCode and is using "opencode" as part of its name, for example "opencode-dashboard" or "opencode-mobile", please add a note to your README to clarify that it is not built by the OpenCode team and is not affiliated with us in any way.
-
----
-
-**Join our community** [Discord](https://discord.gg/opencode) | [X.com](https://x.com/opencode)
+MIT — see [`LICENSE`](LICENSE). NextCode is based on
+[opencode](https://github.com/anomalyco/opencode); copyright remains with the original
+authors.
