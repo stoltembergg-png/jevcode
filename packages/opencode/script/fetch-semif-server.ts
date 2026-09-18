@@ -82,7 +82,9 @@ export async function stageSemifServer(options: StageOptions = {}) {
   const stagedServer = path.join(binariesDir, `llama-server-${target}${isZip ? ".exe" : ""}`)
   const markerPath = path.join(cacheDir, `${target}.json`)
 
-  if (!options.force && (await isUpToDate(markerPath, lock.tag, entry))) {
+  // `--download-only` must always materialize the archive, even when the target is
+  // already staged: the caller may only want the durable copy for mirroring.
+  if (!options.downloadOnly && !options.force && (await isUpToDate(markerPath, lock.tag, entry))) {
     console.log(`llama-server for ${target} is already staged: ${stagedServer}`)
     return { target, stagedServer, libsDir, archive: path.join(cacheDir, entry.asset), skipped: true }
   }
@@ -252,7 +254,9 @@ function parseArgs(argv: string[]): StageOptions {
 }
 
 if (import.meta.main) {
-  stageSemifServer(parseArgs(process.argv.slice(2))).catch((error: unknown) => {
+  // Top-level await keeps the process alive until staging finishes; a floating
+  // promise lets Bun exit 0 mid-download.
+  await stageSemifServer(parseArgs(process.argv.slice(2))).catch((error: unknown) => {
     console.error(error instanceof Error ? error.message : String(error))
     process.exit(1)
   })
