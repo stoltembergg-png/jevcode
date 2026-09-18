@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "NextCode",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "identifier": "ai.opencode.desktop.v2.dev",
   "build": {
     "frontendDist": "web-dist"

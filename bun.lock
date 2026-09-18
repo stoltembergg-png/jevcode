@@ -28,7 +28,7 @@
     },
     "packages/app": {
       "name": "@opencode-ai/app",
-      "version": "0.0.2",
+      "version": "0.0.3",
       "dependencies": {
         "@corvu/drawer": "catalog:",
         "@dnd-kit/abstract": "0.5.0",
@@ -118,7 +118,7 @@
     },
     "packages/codemode": {
       "name": "@opencode-ai/codemode",
-      "version": "0.0.2",
+      "version": "0.0.3",
       "dependencies": {
         "acorn": "8.15.0",
         "effect": "catalog:",
@@ -132,7 +132,7 @@
     },
     "packages/core": {
       "name": "@opencode-ai/core",
-      "version": "0.0.2",
+      "version": "0.0.3",
       "bin": {
         "opencode": "./bin/opencode",
       },
@@ -226,7 +226,7 @@
     },
     "packages/desktop": {
       "name": "@opencode-ai/desktop",
-      "version": "0.0.2",
+      "version": "0.0.3",
       "dependencies": {
         "@zip.js/zip.js": "2.7.62",
         "drizzle-orm": "catalog:",
@@ -284,7 +284,7 @@
     },
     "packages/effect-drizzle-sqlite": {
       "name": "@opencode-ai/effect-drizzle-sqlite",
-      "version": "0.0.2",
+      "version": "0.0.3",
       "dependencies": {
         "drizzle-orm": "catalog:",
         "effect": "catalog:",
@@ -298,7 +298,7 @@
     },
     "packages/effect-sqlite-node": {
       "name": "@opencode-ai/effect-sqlite-node",
-      "version": "0.0.2",
+      "version": "0.0.3",
       "dependencies": {
         "effect": "catalog:",
       },
@@ -310,7 +310,7 @@
     },
     "packages/http-recorder": {
       "name": "@opencode-ai/http-recorder",
-      "version": "0.0.2",
+      "version": "0.0.3",
       "dependencies": {
         "@effect/platform-node": "4.0.0-beta.83",
         "@effect/platform-node-shared": "4.0.0-beta.83",
@@ -341,7 +341,7 @@
     },
     "packages/llm": {
       "name": "@opencode-ai/llm",
-      "version": "0.0.2",
+      "version": "0.0.3",
       "dependencies": {
         "@opencode-ai/schema": "workspace:*",
         "@smithy/eventstream-codec": "4.2.14",
@@ -360,7 +360,7 @@
     },
     "packages/opencode": {
       "name": "opencode",
-      "version": "0.0.2",
+      "version": "0.0.3",
       "bin": {
         "opencode": "./bin/opencode",
       },
@@ -491,7 +491,7 @@
     },
     "packages/plugin": {
       "name": "@opencode-ai/plugin",
-      "version": "0.0.2",
+      "version": "0.0.3",
       "dependencies": {
         "@ai-sdk/provider": "3.0.8",
         "@opencode-ai/sdk": "workspace:*",
@@ -567,7 +567,7 @@
     },
     "packages/sdk/js": {
       "name": "@opencode-ai/sdk",
-      "version": "0.0.2",
+      "version": "0.0.3",
       "dependencies": {
         "cross-spawn": "catalog:",
       },
@@ -582,7 +582,7 @@
     },
     "packages/server": {
       "name": "@opencode-ai/server",
-      "version": "0.0.2",
+      "version": "0.0.3",
       "dependencies": {
         "@opencode-ai/core": "workspace:*",
         "@opencode-ai/protocol": "workspace:*",
@@ -597,7 +597,7 @@
     },
     "packages/session-ui": {
       "name": "@opencode-ai/session-ui",
-      "version": "0.0.2",
+      "version": "0.0.3",
       "dependencies": {
         "@kobalte/core": "catalog:",
         "@opencode-ai/client": "file:../app/vendor/opencode-ai-client-1.17.13-v2.tgz",
@@ -637,7 +637,7 @@
     },
     "packages/tui": {
       "name": "@opencode-ai/tui",
-      "version": "0.0.2",
+      "version": "0.0.3",
       "dependencies": {
         "@opencode-ai/core": "workspace:*",
         "@opencode-ai/plugin": "workspace:*",
@@ -664,7 +664,7 @@
     },
     "packages/ui": {
       "name": "@opencode-ai/ui",
-      "version": "0.0.2",
+      "version": "0.0.3",
       "dependencies": {
         "@kobalte/core": "catalog:",
         "@pierre/diffs": "catalog:",
