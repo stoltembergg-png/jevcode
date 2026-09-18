@@ -1,5 +1,19 @@
 {
   "$schema": "https://opencode.ai/config.json",
+  // semif: local SemIf-style semantic decision plugin backed by llama.cpp.
+  // mode "auto" loads the sidecar at startup, "lazy" on first use, "off" disables it.
+  "plugin": [
+    [
+      "../plugins/semif",
+      {
+        "mode": "auto",
+        "modelPath": "C:\\Users\\Gabriel\\Desktop\\semif-workspace\\models\\LFM2-350M-Q4_K_M.gguf",
+        "serverPath": "C:\\Users\\Gabriel\\Desktop\\semif-workspace\\bin\\b11040\\llama-server.exe",
+        "port": 8817,
+        "threads": 4
+      }
+    ]
+  ],
   "provider": {},
   "permission": {},
   "references": {
