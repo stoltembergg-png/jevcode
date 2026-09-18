@@ -21,8 +21,8 @@ body:
   - type: input
     id: opencode-version
     attributes:
-      label: OpenCode version
-      description: What version of OpenCode are you using?
+      label: NextCode version
+      description: What version of NextCode are you using?
     validations:
       required: false
 

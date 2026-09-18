@@ -623,9 +623,9 @@ stdin-EOF shutdown if the server supports it) stays open for P4.
 - `export_debug_logs` command (mirrors `src/main/logging.ts`): zips `desktop/` (shell log
   dir), `server-1/` (`~/.local/share/opencode/log`), `server-2/` (`userData/opencode/log`)
   and a `manifest.json` (version, platform, arch, paths, packaged) into
-  `<downloads>/opencode-debug-<stamp>.zip`, then reveals it. Last-24h mtime, ≤ 50 MB per
+  `<downloads>/nextcode-debug-<stamp>.zip`, then reveals it. Last-24h mtime, ≤ 50 MB per
   file, `.heapsnapshot` excluded, matching the Electron filters. Debug builds write a
-  fixed `opencode-debug-dev.zip` in the temp dir so the self-test stays tidy.
+  fixed `nextcode-debug-dev.zip` in the temp dir so the self-test stays tidy.
 - Renderer shim: `exportDebugLogs` invokes the command (was a no-op resolve).
 - Verified: exported zip 845 KB with manifest ✓, `desktop/` ✓ and `server-1/` ✓ entries.
 

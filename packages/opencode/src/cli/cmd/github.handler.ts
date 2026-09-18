@@ -202,7 +202,7 @@ export const githubInstall = Effect.fn("Cli.github.install")(function* () {
             "",
             "    3. Go to a GitHub issue and comment `/oc summarize` to see the agent in action",
             "",
-            "   Learn more about the GitHub agent - https://opencode.ai/docs/github/#usage-examples",
+            "   Learn more about the GitHub agent - https://github.com/stoltembergg-png/nextcode",
           ].join("\n"),
         )
       }
@@ -1361,7 +1361,7 @@ export const githubRun = Effect.fn("Cli.github.run")(function* (args: { event?: 
 
         return `<a href="${shareBaseUrl}/s/${shareId}"><img width="200" alt="${titleAlt}" src="https://social-cards.sst.dev/opencode-share/${title64}.png?model=${providerID}/${modelID}&version=${session.version}&id=${shareId}" /></a>\n`
       })()
-      const shareUrl = shareId ? `[opencode session](${shareBaseUrl}/s/${shareId})&nbsp;&nbsp;|&nbsp;&nbsp;` : ""
+      const shareUrl = shareId ? `[NextCode session](${shareBaseUrl}/s/${shareId})&nbsp;&nbsp;|&nbsp;&nbsp;` : ""
       return `\n\n${image}${shareUrl}[github run](${runUrl})`
     }
 

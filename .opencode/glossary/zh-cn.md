@@ -2,13 +2,13 @@
 
 ## Sources
 
-- PR #13942: https://github.com/anomalyco/opencode/pull/13942
+- PR #13942: https://github.com/stoltembergg-png/nextcode/pull/13942
 
 ## Do Not Translate (Locale Additions)
 
-- `OpenCode` (preserve casing in prose; keep `opencode` only when it is part of commands, package names, paths, or code)
+- `NextCode` (preserve casing in prose; keep `NextCode` only when it is part of commands, package names, paths, or code)
 - `OpenCode Zen`
-- `OpenCode CLI`
+- `NextCode CLI`
 - `CLI`, `TUI`, `MCP`, `OAuth`
 - `Model Context Protocol` (prefer the English expansion when introducing `MCP`)
 
@@ -38,5 +38,5 @@ These are preferred terms for docs/UI prose and may evolve.
 
 ## Avoid
 
-- Avoid `opencode` in prose when referring to the product name; use `OpenCode`
+- Avoid `NextCode` in prose when referring to the product name; use `NextCode`
 - Avoid mixing alternative terms for the same concept across docs when a preferred term is already established

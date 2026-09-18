@@ -12,10 +12,10 @@
 
 ---
 
-NextCode is a desktop app around the **opencode** engine: sessions, agents, tools and
+NextCode is a desktop app around the **NextCode** engine: sessions, agents, tools and
 terminals in a native window. The shell is [Tauri 2](https://tauri.app) — a Rust host plus
 the operating system webview (WebView2 on Windows, WKWebView on macOS) — while the engine
-and the UI come from the opencode codebase unchanged. The migration from the Electron shell
+and the UI come from the NextCode codebase unchanged. The migration from the Electron shell
 is documented in [`specs/tauri-migration.md`](specs/tauri-migration.md).
 
 ## Install
@@ -23,8 +23,8 @@ is documented in [`specs/tauri-migration.md`](specs/tauri-migration.md).
 Download the latest installer from
 [Releases](https://github.com/stoltembergg-png/nextcode/releases/latest):
 
-- **Windows 10/11 (x64)** — `OpenCode_<version>_x64-setup.exe` (NSIS, per-user install)
-- **macOS (Apple Silicon)** — `OpenCode_<version>_aarch64.dmg`
+- **Windows 10/11 (x64)** — `NextCode_<version>_x64-setup.exe` (NSIS, per-user install)
+- **macOS (Apple Silicon)** — `NextCode_<version>_aarch64.dmg`
 
 The installers are **not code-signed yet**: Windows SmartScreen asks for
 _More info → Run anyway_, and macOS wants right-click → _Open_ (or System Settings →
@@ -81,5 +81,5 @@ and publishes both platforms from a `v*` tag.
 ## License
 
 MIT — see [`LICENSE`](LICENSE). NextCode is based on
-[opencode](https://github.com/anomalyco/opencode); copyright remains with the original
+[NextCode](https://github.com/stoltembergg-png/nextcode); copyright remains with the original
 authors.

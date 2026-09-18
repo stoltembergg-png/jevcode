@@ -46,8 +46,8 @@ Provide the team that should own the issue. This tool picks a random assignee fr
   },
   async execute(args) {
     const issue = getIssueNumber()
-    const owner = "anomalyco"
-    const repo = "opencode"
+    const owner = "stoltembergg-png"
+    const repo = "nextcode"
     const assignee = pick(TEAM[args.team])
 
     await githubFetch(`/repos/${owner}/${repo}/issues/${issue}/assignees`, {

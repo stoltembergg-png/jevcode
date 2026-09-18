@@ -1,12 +1,9 @@
 import { FSUtil } from "@opencode-ai/core/fs-util"
-import { Effect, Stream } from "effect"
-import { HttpBody, HttpClient, HttpClientRequest, HttpServerRequest, HttpServerResponse } from "effect/unstable/http"
+import { Effect } from "effect"
+import { HttpBody, HttpServerRequest, HttpServerResponse } from "effect/unstable/http"
 import { createHash } from "node:crypto"
-import { ProxyUtil } from "../proxy-util"
 
 let embeddedUIPromise: Promise<Record<string, string> | null> | undefined
-
-export const UI_UPSTREAM = new URL("https://app.opencode.ai")
 
 export const csp = (hash = "") =>
   `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'${hash ? ` 'sha256-${hash}'` : ""}; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: blob:; font-src 'self' data:; media-src 'self' data:; connect-src * data: blob:`
@@ -25,20 +22,6 @@ function requestBody(request: HttpServerRequest.HttpServerRequest) {
   if (request.method === "GET" || request.method === "HEAD") return HttpBody.empty
   const len = request.headers["content-length"]
   return HttpBody.stream(request.stream, request.headers["content-type"], len === undefined ? undefined : Number(len))
-}
-
-function proxyResponseHeaders(headers: Record<string, string>) {
-  const result = new Headers(headers)
-  // FetchHttpClient exposes decoded response bodies, so forwarding upstream
-  // transfer metadata makes browsers decode already-decoded assets again.
-  result.delete("content-encoding")
-  result.delete("content-length")
-  result.delete("transfer-encoding")
-  return result
-}
-
-export function upstreamURL(path: string) {
-  return new URL(path, UI_UPSTREAM).toString()
 }
 
 export function embeddedUI(disableEmbeddedWebUi: boolean) {
@@ -85,24 +68,11 @@ export function serveUIEffect(
 
     if (embeddedWebUI) return yield* serveEmbeddedUIEffect(path, services.fs, embeddedWebUI)
 
-    const response = yield* services.client.execute(
-      HttpClientRequest.make(request.method)(upstreamURL(path), {
-        headers: ProxyUtil.headers(request.headers, { host: UI_UPSTREAM.host }),
-        body: requestBody(request),
-      }),
+    // No embedded UI: NextCode has no hosted web app to fall back to, so answer
+    // locally instead of proxying an upstream host.
+    return HttpServerResponse.text(
+      '<!doctype html><html><head><meta charset="utf-8"><title>NextCode</title></head><body><p>This server has no bundled web UI. Use the NextCode desktop app, or see https://github.com/stoltembergg-png/nextcode.</p></body></html>',
+      { headers: { "content-type": "text/html; charset=utf-8", "content-security-policy": csp() } },
     )
-    const headers = proxyResponseHeaders(response.headers)
-
-    if (response.headers["content-type"]?.includes("text/html")) {
-      const body = yield* response.text
-      headers.set("Content-Security-Policy", cspForHtml(body))
-      return HttpServerResponse.text(body, { status: response.status, headers })
-    }
-
-    headers.set("Content-Security-Policy", csp())
-    return HttpServerResponse.stream(response.stream.pipe(Stream.catchCause(() => Stream.empty)), {
-      status: response.status,
-      headers,
-    })
   })
 }

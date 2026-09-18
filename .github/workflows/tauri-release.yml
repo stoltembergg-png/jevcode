@@ -5,7 +5,7 @@ name: tauri-release
 # secrets the workflow still produces unsigned installers, and signing switches on
 # by itself once the credentials exist (see specs/tauri-migration.md, "P4 prerequisites").
 #
-# The opencode sidecar is cross-compiled once on Ubuntu (the upstream layout): building
+# The NextCode sidecar is cross-compiled once on Ubuntu: building
 # it natively on Windows trips Bun's lifecycle shim for tree-sitter-powershell, which
 # expects a node-gyp at the project root that the pinned Bun does not provide.
 #

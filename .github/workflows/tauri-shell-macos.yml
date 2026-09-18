@@ -37,7 +37,7 @@ jobs:
         with:
           workspaces: packages/desktop/src-tauri
 
-      - name: Build the opencode sidecar for macOS
+      - name: Build the NextCode sidecar for macOS
         working-directory: packages/opencode
         run: bun run build --single --skip-embed-web-ui
 

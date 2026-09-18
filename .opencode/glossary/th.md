@@ -2,13 +2,13 @@
 
 ## Sources
 
-- PR #10809: https://github.com/anomalyco/opencode/pull/10809
-- PR #11496: https://github.com/anomalyco/opencode/pull/11496
+- PR #10809: https://github.com/stoltembergg-png/nextcode/pull/10809
+- PR #11496: https://github.com/stoltembergg-png/nextcode/pull/11496
 
 ## Do Not Translate (Locale Additions)
 
-- `OpenCode` (preserve casing in prose; keep `opencode` only in commands, package names, paths, or code)
-- `OpenCode CLI`
+- `NextCode` (preserve casing in prose; keep `NextCode` only in commands, package names, paths, or code)
+- `NextCode CLI`
 - `CLI`, `TUI`, `MCP`, `OAuth`
 - Commands, flags, file paths, and code literals (keep exactly as written)
 

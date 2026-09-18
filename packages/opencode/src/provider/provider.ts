@@ -469,7 +469,7 @@ function custom(dep: CustomDep): Record<string, CustomLoader> {
         autoload: false,
         options: {
           headers: {
-            "HTTP-Referer": "https://opencode.ai/",
+            "HTTP-Referer": "https://github.com/stoltembergg-png/nextcode",
             "X-Title": "opencode",
             "X-Source": "opencode",
           },
@@ -480,7 +480,7 @@ function custom(dep: CustomDep): Record<string, CustomLoader> {
         autoload: false,
         options: {
           headers: {
-            "HTTP-Referer": "https://opencode.ai/",
+            "HTTP-Referer": "https://github.com/stoltembergg-png/nextcode",
             "X-Title": "opencode",
           },
         },
@@ -490,7 +490,7 @@ function custom(dep: CustomDep): Record<string, CustomLoader> {
         autoload: provider.source === "config",
         options: {
           headers: {
-            "HTTP-Referer": "https://opencode.ai/",
+            "HTTP-Referer": "https://github.com/stoltembergg-png/nextcode",
             "X-Title": "opencode",
             "X-BILLING-INVOKE-ORIGIN": "OpenCode",
           },
@@ -501,7 +501,7 @@ function custom(dep: CustomDep): Record<string, CustomLoader> {
         autoload: false,
         options: {
           headers: {
-            "http-referer": "https://opencode.ai/",
+            "http-referer": "https://github.com/stoltembergg-png/nextcode",
             "x-title": "opencode",
           },
         },
@@ -606,7 +606,7 @@ function custom(dep: CustomDep): Record<string, CustomLoader> {
         autoload: false,
         options: {
           headers: {
-            "HTTP-Referer": "https://opencode.ai/",
+            "HTTP-Referer": "https://github.com/stoltembergg-png/nextcode",
             "X-Title": "opencode",
           },
         },
@@ -896,7 +896,7 @@ function custom(dep: CustomDep): Record<string, CustomLoader> {
         autoload: false,
         options: {
           headers: {
-            "HTTP-Referer": "https://opencode.ai/",
+            "HTTP-Referer": "https://github.com/stoltembergg-png/nextcode",
             "X-Title": "opencode",
           },
         },
