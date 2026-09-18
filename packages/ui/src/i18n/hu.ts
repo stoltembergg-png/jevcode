@@ -111,6 +111,8 @@ export const dict: Record<string, string> = {
   "ui.messagePart.context.search.other": "{{count}} keresések",
   "ui.messagePart.context.list.one": "{{count}} lista",
   "ui.messagePart.context.list.other": "{{count}} listák",
+  "ui.messagePart.edit.one": "({{count}} edit)",
+  "ui.messagePart.edit.other": "({{count}} edits)",
   "ui.list.loading": "Betöltés",
   "ui.list.empty": "Nincs eredmény",
   "ui.list.clearFilter": "Szűrő törlése",

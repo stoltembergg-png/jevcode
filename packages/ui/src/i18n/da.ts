@@ -108,6 +108,8 @@ export const dict = {
   "ui.messagePart.context.search.other": "{{count}} søgninger",
   "ui.messagePart.context.list.one": "{{count}} liste",
   "ui.messagePart.context.list.other": "{{count}} lister",
+  "ui.messagePart.edit.one": "({{count}} edit)",
+  "ui.messagePart.edit.other": "({{count}} edits)",
   "ui.messagePart.diagnostic.error": "Fejl",
   "ui.messagePart.title.edit": "Rediger",
   "ui.messagePart.title.write": "Skriv",

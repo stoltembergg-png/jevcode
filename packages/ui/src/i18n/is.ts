@@ -109,6 +109,8 @@ export const dict: Record<string, string> = {
   "ui.messagePart.context.search.other": "{{count}} leitir",
   "ui.messagePart.context.list.one": "{{count}} listi",
   "ui.messagePart.context.list.other": "{{count}} listar",
+  "ui.messagePart.edit.one": "({{count}} edit)",
+  "ui.messagePart.edit.other": "({{count}} edits)",
   "ui.list.loading": "Hleðsla",
   "ui.list.empty": "Engar niðurstöður",
   "ui.list.clearFilter": "Hreinsaðu síu",

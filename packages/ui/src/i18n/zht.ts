@@ -112,6 +112,8 @@ export const dict = {
   "ui.messagePart.context.search.other": "{{count}} 次搜尋",
   "ui.messagePart.context.list.one": "列出 {{count}} 次",
   "ui.messagePart.context.list.other": "列出 {{count}} 次",
+  "ui.messagePart.edit.one": "({{count}} edit)",
+  "ui.messagePart.edit.other": "({{count}} edits)",
   "ui.messagePart.diagnostic.error": "錯誤",
   "ui.messagePart.title.edit": "編輯",
   "ui.messagePart.title.write": "寫入",

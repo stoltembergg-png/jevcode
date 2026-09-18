@@ -111,6 +111,8 @@ export const dict: Record<string, string> = {
   "ui.messagePart.context.search.other": "{{count}} qidiruvi",
   "ui.messagePart.context.list.one": "{{count}} ro'yxati",
   "ui.messagePart.context.list.other": "{{count}} ro'yxatlari",
+  "ui.messagePart.edit.one": "({{count}} edit)",
+  "ui.messagePart.edit.other": "({{count}} edits)",
   "ui.list.loading": "Yuklanmoqda",
   "ui.list.empty": "Natija yoʻq",
   "ui.list.clearFilter": "Filtrni tozalash",

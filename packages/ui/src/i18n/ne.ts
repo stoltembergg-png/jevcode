@@ -111,6 +111,8 @@ export const dict: Record<string, string> = {
   "ui.messagePart.context.search.other": "{{count}} खोजहरू",
   "ui.messagePart.context.list.one": "{{count}} सूची",
   "ui.messagePart.context.list.other": "{{count}} सूचीहरू",
+  "ui.messagePart.edit.one": "({{count}} edit)",
+  "ui.messagePart.edit.other": "({{count}} edits)",
   "ui.list.loading": "लोड गर्दै",
   "ui.list.empty": "कुनै परिणाम छैन",
   "ui.list.clearFilter": "फिल्टर खाली गर्नुहोस्",

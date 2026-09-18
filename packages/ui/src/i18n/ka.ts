@@ -109,6 +109,8 @@ export const dict: Record<string, string> = {
   "ui.messagePart.context.search.other": "{{count}} ძიება",
   "ui.messagePart.context.list.one": "{{count}} სია",
   "ui.messagePart.context.list.other": "{{count}} სიები",
+  "ui.messagePart.edit.one": "({{count}} edit)",
+  "ui.messagePart.edit.other": "({{count}} edits)",
   "ui.list.loading": "იტვირთება",
   "ui.list.empty": "შედეგები არ არის",
   "ui.list.clearFilter": "ფილტრის გასუფთავება",

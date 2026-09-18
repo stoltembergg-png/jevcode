@@ -109,6 +109,8 @@ export const dict = {
   "ui.messagePart.context.search.other": "{{count}} търсения",
   "ui.messagePart.context.list.one": "{{count}} списък",
   "ui.messagePart.context.list.other": "{{count}} списъци",
+  "ui.messagePart.edit.one": "({{count}} edit)",
+  "ui.messagePart.edit.other": "({{count}} edits)",
   "ui.list.loading": "Зарежда се",
   "ui.list.empty": "Няма резултати",
   "ui.list.clearFilter": "Изчистване на филтъра",

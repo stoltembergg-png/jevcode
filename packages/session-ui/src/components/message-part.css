@@ -665,6 +665,115 @@
   }
 }
 
+/* Consecutive edits to one file collapse into a compact, muted card. The row
+   stays quiet and the file name plus combined counts carry the meaning. */
+[data-component="edit-tool-group-trigger"] {
+  width: 100%;
+  min-height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  cursor: default;
+
+  [data-component="edit-tool-group-icon"] {
+    color: var(--v2-icon-icon-muted, var(--icon-weak, currentColor));
+  }
+
+  [data-component="edit-tool-group-info"] {
+    flex: 1 1 auto;
+  }
+
+  [data-component="edit-tool-group-action"] {
+    /* The action is a description of what happened, not a heavier tool name. */
+    color: var(--v2-text-text-muted);
+    font-weight: var(--font-weight-regular);
+  }
+
+  [data-component="edit-tool-group-filename"] {
+    color: var(--v2-text-text-base);
+  }
+
+  [data-component="edit-tool-group-count"] {
+    flex-shrink: 0;
+    color: var(--v2-text-text-muted);
+    font-family: var(--font-family-sans);
+    font-size: 14px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  [data-slot="edit-tool-group-actions"] {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 12px;
+  }
+
+  [data-slot="collapsible-arrow"] {
+    color: var(--icon-weaker);
+    cursor: pointer;
+  }
+}
+
+[data-component="edit-tool-group-list"] {
+  padding-top: 2px;
+  padding-right: 0;
+  padding-bottom: 0;
+  padding-left: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* Expand/collapse motion for the grouped card. Kobalte keeps the content
+   mounted while these run, so both directions animate; reduced motion opts out. */
+[data-component="collapsible"]
+  [data-slot="collapsible-content"]:has(> [data-component="edit-tool-group-list"]) {
+  overflow: hidden;
+}
+
+[data-component="collapsible"]
+  [data-slot="collapsible-content"]:has(> [data-component="edit-tool-group-list"])[data-expanded] {
+  animation: editToolGroupIn var(--motion-panel, 220ms) var(--motion-ease-out, cubic-bezier(0.22, 1, 0.36, 1));
+}
+
+[data-component="collapsible"]
+  [data-slot="collapsible-content"]:has(> [data-component="edit-tool-group-list"])[data-closed] {
+  animation: editToolGroupOut var(--motion-panel, 220ms) var(--motion-ease-in, cubic-bezier(0.4, 0, 1, 1));
+}
+
+@keyframes editToolGroupIn {
+  from {
+    height: 0;
+    opacity: 0;
+  }
+  to {
+    height: var(--kb-collapsible-content-height);
+    opacity: 1;
+  }
+}
+
+@keyframes editToolGroupOut {
+  from {
+    height: var(--kb-collapsible-content-height);
+    opacity: 0;
+  }
+  to {
+    height: 0;
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-component="collapsible"]
+    [data-slot="collapsible-content"]:has(> [data-component="edit-tool-group-list"])[data-expanded],
+  [data-component="collapsible"]
+    [data-slot="collapsible-content"]:has(> [data-component="edit-tool-group-list"])[data-closed] {
+    animation: none;
+  }
+}
+
 [data-component="diagnostics"] {
   display: flex;
   flex-direction: column;

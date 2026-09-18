@@ -21,10 +21,12 @@ import { Button } from "@opencode-ai/ui/button"
 import { Card } from "@opencode-ai/ui/card"
 import {
   ContextToolGroup,
+  EditToolGroup,
   Message,
   MessageDivider,
   Part as MessagePart,
   partDefaultOpen,
+  type EditToolItem,
   type UserActions,
 } from "@opencode-ai/session-ui/message-part"
 import { DiffChanges } from "@opencode-ai/ui/diff-changes"
@@ -81,6 +83,7 @@ import { filterVirtualIndexes } from "./virtual-items"
 const emptyMessages: MessageType[] = []
 const emptyParts: PartType[] = []
 const emptyTools: ToolPart[] = []
+const emptyEditItems: EditToolItem[] = []
 const emptyAssistantMessages: AssistantMessage[] = []
 const idle = { type: "idle" as const }
 
@@ -995,6 +998,32 @@ export function MessageTimeline(props: {
             workingTurn(row().userMessageID) && lastAssistantGroupKey().get(row().userMessageID) === row().group.key
           }
           onSizeChange={onSizeChange}
+        />
+      )
+    }
+
+    if (row().group.type === "edit") {
+      const items = createMemo(() => {
+        const group = row().group
+        if (group.type !== "edit") return emptyEditItems
+        return group.refs.flatMap((ref) => {
+          const message = messageByID().get(ref.messageID)
+          const part = getMsgPart(ref.messageID, ref.partID)
+          if (!message || !part || part.type !== "tool") return []
+          return [{ message, part }]
+        })
+      })
+      const editOpenKey = () => `edit:${row().group.key}`
+      const open = createMemo(() => toolOpen[editOpenKey()] === true)
+
+      return (
+        <EditToolGroup
+          items={items()}
+          open={open()}
+          onOpenChange={(value) => setToolOpen(editOpenKey(), value)}
+          onSizeChange={onSizeChange}
+          onContentRendered={onSizeChange}
+          virtualizeDiff={false}
         />
       )
     }

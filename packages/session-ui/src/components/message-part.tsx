@@ -59,6 +59,15 @@ import { TooltipV2 } from "@opencode-ai/ui/v2/tooltip-v2"
 import { Spinner } from "@opencode-ai/ui/spinner"
 import { TextShimmer } from "@opencode-ai/ui/text-shimmer"
 import { AnimatedCountList } from "./tool-count-summary"
+import { AnimatedCountLabel } from "./tool-count-label"
+import {
+  editFileDiff,
+  editFilePath,
+  groupParts,
+  isContextGroupTool,
+  sameGroups,
+  type PartGroup,
+} from "./message-part-groups"
 import { ToolStatusTitle } from "./tool-status-title"
 import { patchFiles } from "./apply-patch-file"
 import { partDefaultOpen } from "./part-default-open"
@@ -605,7 +614,6 @@ function taskSession(
     .sort((a, b) => (b.time.created ?? 0) - (a.time.created ?? 0))[0]?.id
 }
 
-const CONTEXT_GROUP_TOOLS = new Set(["read", "glob", "grep", "list"])
 const HIDDEN_TOOLS = new Set(["todowrite"])
 
 function list<T>(value: T[] | undefined | null, fallback: T[]) {
@@ -620,90 +628,8 @@ function same<T>(a: readonly T[] | undefined, b: readonly T[] | undefined) {
   return a.every((x, i) => x === b[i])
 }
 
-export type PartRef = {
-  messageID: string
-  partID: string
-}
-
-export type PartGroup =
-  | {
-      key: string
-      type: "part"
-      ref: PartRef
-    }
-  | {
-      key: string
-      type: "context"
-      refs: PartRef[]
-    }
-
-function sameRef(a: PartRef, b: PartRef) {
-  return a.messageID === b.messageID && a.partID === b.partID
-}
-
-function sameGroup(a: PartGroup, b: PartGroup) {
-  if (a === b) return true
-  if (a.key !== b.key) return false
-  if (a.type !== b.type) return false
-  if (a.type === "part") {
-    if (b.type !== "part") return false
-    return sameRef(a.ref, b.ref)
-  }
-  if (b.type !== "context") return false
-  if (a.refs.length !== b.refs.length) return false
-  return a.refs.every((ref, i) => sameRef(ref, b.refs[i]!))
-}
-
-export function sameGroups(a: readonly PartGroup[] | undefined, b: readonly PartGroup[] | undefined) {
-  if (a === b) return true
-  if (!a || !b) return false
-  if (a.length !== b.length) return false
-  return a.every((item, i) => sameGroup(item, b[i]!))
-}
-
-export function groupParts(parts: { messageID: string; part: PartType }[]) {
-  const result: PartGroup[] = []
-  let start = -1
-
-  const flush = (end: number) => {
-    if (start < 0) return
-    const first = parts[start]
-    const last = parts[end]
-    if (!first || !last) {
-      start = -1
-      return
-    }
-    result.push({
-      key: `context:${first.part.id}`,
-      type: "context",
-      refs: parts.slice(start, end + 1).map((item) => ({
-        messageID: item.messageID,
-        partID: item.part.id,
-      })),
-    })
-    start = -1
-  }
-
-  parts.forEach((item, index) => {
-    if (isContextGroupTool(item.part)) {
-      if (start < 0) start = index
-      return
-    }
-
-    flush(index - 1)
-    result.push({
-      key: `part:${item.messageID}:${item.part.id}`,
-      type: "part",
-      ref: {
-        messageID: item.messageID,
-        partID: item.part.id,
-      },
-    })
-  })
-
-  flush(parts.length - 1)
-  return result
-}
+export type { PartGroup, PartRef } from "./message-part-groups"
+export { groupParts, isContextGroupTool, sameGroups } from "./message-part-groups"
 
 function index<T extends { id: string }>(items: readonly T[]) {
   return new Map(items.map((item) => [item.id, item] as const))
@@ -735,6 +661,7 @@ export function AssistantParts(props: {
   const data = useData()
   const emptyParts: PartType[] = []
   const emptyTools: ToolPart[] = []
+  const emptyEditItems: EditToolItem[] = []
   const msgs = createMemo(() => index(props.messages))
   const part = createMemo(
     () =>
@@ -790,6 +717,29 @@ export function AssistantParts(props: {
                 )
               })()}
             </Match>
+            <Match when={entryType() === "edit"}>
+              {(() => {
+                const items = createMemo(
+                  () => {
+                    const entry = entryAccessor()
+                    if (entry.type !== "edit") return emptyEditItems
+                    return entry.refs.flatMap((ref) => {
+                      const message = msgs().get(ref.messageID)
+                      const item = part().get(ref.messageID)?.get(ref.partID)
+                      if (!message || item?.type !== "tool") return []
+                      return [{ message, part: item }]
+                    })
+                  },
+                  emptyEditItems,
+                )
+
+                return (
+                  <Show when={items().length > 1}>
+                    <EditToolGroup items={items()} />
+                  </Show>
+                )
+              })()}
+            </Match>
             <Match when={entryType() === "part"}>
               {(() => {
                 const message = createMemo(() => {
@@ -824,10 +774,6 @@ export function AssistantParts(props: {
       }}
     </Index>
   )
-}
-
-function isContextGroupTool(part: PartType): part is ToolPart {
-  return part.type === "tool" && CONTEXT_GROUP_TOOLS.has(part.tool)
 }
 
 function contextToolDetail(part: ToolPart): string | undefined {
@@ -971,6 +917,7 @@ export function AssistantMessageDisplay(props: {
   useV2Actions?: boolean
 }) {
   const emptyTools: ToolPart[] = []
+  const emptyEditItems: EditToolItem[] = []
   const part = createMemo(() => index(props.parts))
   const grouped = createMemo(
     () =>
@@ -1010,6 +957,28 @@ export function AssistantMessageDisplay(props: {
                 return (
                   <Show when={parts().length > 0}>
                     <ContextToolGroup parts={parts()} />
+                  </Show>
+                )
+              })()}
+            </Match>
+            <Match when={entryType() === "edit"}>
+              {(() => {
+                const items = createMemo(
+                  () => {
+                    const entry = entryAccessor()
+                    if (entry.type !== "edit") return emptyEditItems
+                    return entry.refs.flatMap((ref) => {
+                      const item = part().get(ref.partID)
+                      if (item?.type !== "tool") return []
+                      return [{ message: props.message, part: item }]
+                    })
+                  },
+                  emptyEditItems,
+                )
+
+                return (
+                  <Show when={items().length > 1}>
+                    <EditToolGroup items={items()} />
                   </Show>
                 )
               })()}
@@ -1144,6 +1113,106 @@ export function ContextToolGroup(props: {
                 </div>
               )
             }}
+          </Index>
+        </div>
+      </Collapsible.Content>
+    </Collapsible>
+  )
+}
+
+export type EditToolItem = {
+  message: MessageType
+  part: ToolPart
+}
+
+// Consecutive edits to one file collapse into a single compact card. The card
+// keeps the file name, the combined diff counts, and how many edits landed,
+// while every individual diff only renders after expanding the card.
+export function EditToolGroup(props: {
+  items: EditToolItem[]
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+  onSizeChange?: () => void
+  onContentRendered?: () => void
+  virtualizeDiff?: boolean
+}) {
+  const i18n = useI18n()
+  const [localOpen, setLocalOpen] = createSignal(false)
+  const open = () => props.open ?? localOpen()
+  const pending = createMemo(() =>
+    props.items.some((item) => item.part.state.status === "pending" || item.part.state.status === "running"),
+  )
+  const file = createMemo(() => {
+    const first = props.items[0]
+    if (!first) return ""
+    return editFilePath(first.part)
+  })
+  const filename = createMemo(() => (file() ? getFilename(file()) : ""))
+  const stats = createMemo(() =>
+    props.items.reduce(
+      (acc, item) => {
+        const filediff = editFileDiff(item.part)
+        return {
+          additions: acc.additions + (filediff?.additions ?? 0),
+          deletions: acc.deletions + (filediff?.deletions ?? 0),
+        }
+      },
+      { additions: 0, deletions: 0 },
+    ),
+  )
+  const hasStats = createMemo(() => stats().additions > 0 || stats().deletions > 0)
+  const handleOpenChange = (value: boolean) => {
+    if (props.open === undefined) setLocalOpen(value)
+    props.onOpenChange?.(value)
+    props.onSizeChange?.()
+  }
+
+  return (
+    <Collapsible
+      open={open()}
+      onOpenChange={handleOpenChange}
+      variant="ghost"
+      class="tool-collapsible"
+      data-component="edit-tool-group"
+      data-timeline-part-ids={props.items.map((item) => item.part.id).join(",")}
+    >
+      <Collapsible.Trigger>
+        <div data-component="edit-tool-group-trigger">
+          <span data-slot="basic-tool-tool-indicator" data-component="edit-tool-group-icon">
+            <Icon name="code-lines" size="small" />
+          </span>
+          <div data-slot="basic-tool-tool-info-main" data-component="edit-tool-group-info">
+            <span data-slot="basic-tool-tool-title" data-component="edit-tool-group-action">
+              <TextShimmer text={i18n.t("ui.messagePart.title.edit")} active={pending()} />
+            </span>
+            <Show when={filename()}>
+              <span data-slot="basic-tool-tool-subtitle" data-component="edit-tool-group-filename">
+                {filename()}
+              </span>
+            </Show>
+            <span data-component="edit-tool-group-count">
+              <AnimatedCountLabel plural="ui.messagePart.edit" count={props.items.length} />
+            </span>
+          </div>
+          <div data-slot="edit-tool-group-actions">
+            <Show when={hasStats()}>
+              <DiffChanges changes={stats()} />
+            </Show>
+            <Collapsible.Arrow />
+          </div>
+        </div>
+      </Collapsible.Trigger>
+      <Collapsible.Content>
+        <div data-component="edit-tool-group-list">
+          <Index each={props.items}>
+            {(item) => (
+              <Part
+                part={item().part}
+                message={item().message}
+                virtualizeDiff={props.virtualizeDiff}
+                onContentRendered={props.onContentRendered}
+              />
+            )}
           </Index>
         </div>
       </Collapsible.Content>

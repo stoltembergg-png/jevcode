@@ -109,6 +109,8 @@ export const dict: Record<string, string> = {
   "ui.messagePart.context.search.other": "{{count}} جستجو می کند",
   "ui.messagePart.context.list.one": "لیست {{count}}",
   "ui.messagePart.context.list.other": "لیست های {{count}}",
+  "ui.messagePart.edit.one": "({{count}} edit)",
+  "ui.messagePart.edit.other": "({{count}} edits)",
   "ui.list.loading": "در حال بارگذاری",
   "ui.list.empty": "هیچ نتیجه ای وجود ندارد",
   "ui.list.clearFilter": "فیلتر را پاک کنید",

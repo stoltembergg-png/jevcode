@@ -109,6 +109,8 @@ export const dict = {
   "ui.messagePart.context.search.other": "{{count}} ҷустуҷӯ",
   "ui.messagePart.context.list.one": "{{count}} рӯйхат",
   "ui.messagePart.context.list.other": "{{count}} рӯйхатҳо",
+  "ui.messagePart.edit.one": "({{count}} edit)",
+  "ui.messagePart.edit.other": "({{count}} edits)",
   "ui.list.loading": "Бор карда мешавад",
   "ui.list.empty": "Ҳеҷ натиҷае нест",
   "ui.list.clearFilter": "Филтрро тоза кунед",

@@ -125,6 +125,10 @@ export const dict: Record<string, string> = {
   "ui.messagePart.context.list.few": "{{count}} списки",
   "ui.messagePart.context.list.many": "{{count}} списків",
   "ui.messagePart.context.list.other": "{{count}} списків",
+  "ui.messagePart.edit.one": "({{count}} edit)",
+  "ui.messagePart.edit.few": "({{count}} edits)",
+  "ui.messagePart.edit.many": "({{count}} edits)",
+  "ui.messagePart.edit.other": "({{count}} edits)",
 
   "ui.list.loading": "Завантаження",
   "ui.list.empty": "Немає результатів",

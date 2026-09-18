@@ -108,6 +108,8 @@ export const dict: Record<string, string> = {
   "ui.messagePart.context.search.other": "{{count}} hakua",
   "ui.messagePart.context.list.one": "{{count}} listaus",
   "ui.messagePart.context.list.other": "{{count}} listausta",
+  "ui.messagePart.edit.one": "({{count}} edit)",
+  "ui.messagePart.edit.other": "({{count}} edits)",
   "ui.list.loading": "Ladataan",
   "ui.list.empty": "Ei tuloksia",
   "ui.list.clearFilter": "Tyhjennä suodatin",

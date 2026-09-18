@@ -110,6 +110,8 @@ export const dict: Record<string, string> = {
   "ui.messagePart.context.search.other": "{{count}} تلاشاں",
   "ui.messagePart.context.list.one": "{{count}} لسٹ",
   "ui.messagePart.context.list.other": "{{count}} فہرستاں",
+  "ui.messagePart.edit.one": "({{count}} edit)",
+  "ui.messagePart.edit.other": "({{count}} edits)",
   "ui.list.loading": "لوڈ ہو رہیا اے",
   "ui.list.empty": "کوئی نتیجہ نئیں نکلیا",
   "ui.list.clearFilter": "فلٹر صاف کرو",

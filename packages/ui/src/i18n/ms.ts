@@ -109,6 +109,8 @@ export const dict: Record<string, string> = {
   "ui.messagePart.context.search.other": "{{count}} carian",
   "ui.messagePart.context.list.one": "{{count}} senarai",
   "ui.messagePart.context.list.other": "{{count}} senarai",
+  "ui.messagePart.edit.one": "({{count}} edit)",
+  "ui.messagePart.edit.other": "({{count}} edits)",
   "ui.list.loading": "Memuatkan",
   "ui.list.empty": "Tiada hasil",
   "ui.list.clearFilter": "Kosongkan penapis",

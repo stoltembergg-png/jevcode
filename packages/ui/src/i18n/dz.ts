@@ -111,6 +111,8 @@ export const dict: Record<string, string> = {
   "ui.messagePart.context.search.other": "{{count}} འཚོལ་ཞིབ།",
   "ui.messagePart.context.list.one": "{{count}} ཐོ་གཞུང་།",
   "ui.messagePart.context.list.other": "{{count}} ཐོ་ཡིག་ཚུ།",
+  "ui.messagePart.edit.one": "({{count}} edit)",
+  "ui.messagePart.edit.other": "({{count}} edits)",
   "ui.list.loading": "མངོན་གསལ་འབད་དོ།",
   "ui.list.empty": "གྲུབ་འབྲས་མེད།",
   "ui.list.clearFilter": "ཚགས་མ་བསལ།",

@@ -110,6 +110,8 @@ export const dict = {
   "ui.messagePart.context.search.other": "ค้นหา {{count}} รายการ",
   "ui.messagePart.context.list.one": "รายการ {{count}} รายการ",
   "ui.messagePart.context.list.other": "รายการ {{count}} รายการ",
+  "ui.messagePart.edit.one": "({{count}} edit)",
+  "ui.messagePart.edit.other": "({{count}} edits)",
   "ui.messagePart.diagnostic.error": "ข้อผิดพลาด",
   "ui.messagePart.title.edit": "แก้ไข",
   "ui.messagePart.title.write": "เขียน",
