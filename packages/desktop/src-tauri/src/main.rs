@@ -1439,6 +1439,17 @@ fn write_debug_zip(
 }
 
 fn main() {
+    // Surface shell panics in the log file as well: the default hook only writes to stderr, which
+    // a packaged Windows build has no console for, so `export_debug_logs` would miss them. Keep the
+    // default hook so the message still reaches stderr when a console exists.
+    {
+        let default_hook = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |info| {
+            log::error!("[shell] panic: {info}");
+            default_hook(info);
+        }));
+    }
+
     let builder = tauri::Builder::default()
         // Must be registered before the deep-link plugin so second launches are
         // forwarded into the running instance instead of spawning a new process.
