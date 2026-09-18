@@ -12,8 +12,7 @@ import { lte } from "drizzle-orm"
 import { not } from "drizzle-orm"
 import { or } from "drizzle-orm"
 import { sql } from "drizzle-orm"
-import { sql } from "drizzle-orm"
-import { Duration, Effect, Schedule, Scope } from "effect"
+import { Effect, Schedule, Scope } from "effect"
 import { HttpApiBuilder, HttpApiError } from "effect/unstable/httpapi"
 import { InstanceHttpApi } from "../api"
 import { HistoryPayload, ReplayPayload, SessionPayload, StorageStatus, CompactPayload, CompactResponse } from "../groups/sync"
@@ -34,7 +33,7 @@ export const syncHandlers = HttpApiBuilder.group(InstanceHttpApi, "sync", (handl
     // query planner stats, and remove events for aggregates that no longer have a session.
     // Runs once shortly after the server is ready, then every 24 hours.
     const runMaintenance = Effect.fn("SyncHttpApi.maintenance")(function* () {
-      yield* Effect.sleep(Duration.seconds(30))
+      yield* Effect.sleep("30 seconds")
       yield* db.run(sql`DELETE FROM event WHERE aggregate_id NOT IN (SELECT id FROM session)`)
       yield* db.run(sql`DELETE FROM event_sequence WHERE aggregate_id NOT IN (SELECT id FROM session)`)
       yield* db.run("PRAGMA wal_checkpoint(TRUNCATE)")
@@ -43,10 +42,9 @@ export const syncHandlers = HttpApiBuilder.group(InstanceHttpApi, "sync", (handl
 
     // WAL hygiene at boot, then periodic maintenance in a background fiber.
     yield* db.run("PRAGMA wal_checkpoint(TRUNCATE)").pipe(Effect.ignore)
-    yield* Effect.forkIn(
-      scope,
+    yield* Effect.forkScoped(
       runMaintenance().pipe(
-        Effect.repeat(Schedule.spaced(Duration.hours(24))),
+        Effect.repeat(Schedule.spaced("24 hours")),
         Effect.ignore,
       ),
     )
@@ -116,11 +114,9 @@ export const syncHandlers = HttpApiBuilder.group(InstanceHttpApi, "sync", (handl
 
     const storage = Effect.fn("SyncHttpApi.storage")(function* () {
       const dbPath = Database.path()
-      const fileBytes = yield* Effect.promise(() => Bun.file(dbPath).size).pipe(Effect.orDie)
-      const tables = yield* db.all<{ name: string; bytes: number }>(
-        sql`SELECT name, SUM(pgsize) AS bytes FROM dbstat GROUP BY name ORDER BY bytes DESC LIMIT 10`,
-      ).pipe(Effect.orDie)
-      return { fileBytes, tables }
+      const fileBytes = yield* Effect.sync(() => Bun.file(dbPath).size).pipe(Effect.orDie)
+      // Per-table breakdown via `dbstat` is not available in this SQLite build.
+      return { fileBytes, tables: [] as { name: string; bytes: number }[] }
     })
 
     const compact = Effect.fn("SyncHttpApi.compact")(function* (ctx: { payload: typeof CompactPayload.Type }) {
@@ -130,7 +126,7 @@ export const syncHandlers = HttpApiBuilder.group(InstanceHttpApi, "sync", (handl
       }
       yield* db.run("PRAGMA optimize").pipe(Effect.ignore)
       const dbPath = Database.path()
-      const fileBytes = yield* Effect.promise(() => Bun.file(dbPath).size).pipe(Effect.orDie)
+      const fileBytes = yield* Effect.sync(() => Bun.file(dbPath).size).pipe(Effect.orDie)
       return { fileBytes, done: true }
     })
 
