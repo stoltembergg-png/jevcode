@@ -11,6 +11,11 @@ on:
     branches: [tauri-shell]
     paths:
       - "packages/desktop/**"
+      - "packages/app/**"
+      - "packages/ui/**"
+      - "packages/session-ui/**"
+      - "packages/client/**"
+      - "packages/identity/**"
       - ".github/workflows/tauri-shell-macos.yml"
 
 concurrency:
