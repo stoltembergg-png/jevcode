@@ -66,8 +66,10 @@ capability). Tauri/plugin upgrades should happen as one batch, gated by the rele
 controls; batch-upgrade Tauri + plugins with a CI pass. Effort M (upgrade) · Risk M · Impact M.
 
 ### 5. Protocol and codegen
-The generated clients already have a reproducibility check (`check:generated`), which is exactly the
-kind of guard that keeps an HTTP contract honest — it is just not wired into CI yet.
+The generated clients already have a reproducibility check (`check:generated`), and it is now wired
+into CI (`.github/workflows/codegen-check.yml`, triggered by changes to `client`, `server`, `protocol`,
+`schema` and `httpapi-codegen`). It was verified clean locally; note that this clone sets
+`core.autocrlf=true`, so a run here shows line-ending noise that is not content drift.
 
 **Recommendation:** run `check:generated` in CI (cheap, catches drift). Defer any package renaming
 (`@opencode-ai/*`) until there is a publishing reason — it is a mechanical but wide change.
@@ -110,7 +112,7 @@ the 1.3 MB onboarding video, which is an eager module import in `help-button.tsx
 | # | Item | Area | Impact | Effort | Risk | When |
 | --- | --- | --- | --- | --- | --- | --- |
 | 1 | ~~Windows shell CI job (build + boot + self-tests)~~ **added** (`.github/workflows/tauri-shell-windows.yml`: cross-compiled sidecar + shell boot/assert; first run pending) | CI | H | S/M | L | done |
-| 2 | Wire `check:generated` into CI | protocol | M | S | L | next |
+| 2 | ~~Wire `check:generated` into CI~~ **added** (`codegen-check.yml`; verified clean — this clone only shows CRLF noise) | protocol | M | S | L | done |
 | 3 | ~~Drop production source maps from the Tauri build~~ **done** (81.9 MB → 35.0 MB) | bundle | M | S | L | done |
 | 4 | Event-log retention + one-time compaction | storage | H | M | M | next |
 | 5 | Stale channel-DB cleanup | storage | L | S | L | next |

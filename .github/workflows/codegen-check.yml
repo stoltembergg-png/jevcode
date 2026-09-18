@@ -1,0 +1,40 @@
+name: codegen-check
+
+# Guards the generated HTTP clients against drift: `check:generated` regenerates them
+# from the local protocol and fails if the committed files change. Cheap (no Rust, no
+# sidecar) and it runs exactly when the contract can change.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [tauri-shell]
+    paths:
+      - "packages/client/**"
+      - "packages/server/**"
+      - "packages/protocol/**"
+      - "packages/schema/**"
+      - "packages/httpapi-codegen/**"
+      - "package.json"
+      - "bun.lock"
+      - ".github/workflows/codegen-check.yml"
+
+concurrency:
+  group: codegen-check-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  generated:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Check the generated clients are in sync
+        run: bun run --cwd packages/client check:generated
