@@ -1,6 +1,6 @@
 import { FSUtil } from "@opencode-ai/core/fs-util"
 import { Effect } from "effect"
-import { HttpBody, HttpServerRequest, HttpServerResponse } from "effect/unstable/http"
+import { HttpBody, HttpClient, HttpServerRequest, HttpServerResponse } from "effect/unstable/http"
 import { createHash } from "node:crypto"
 
 let embeddedUIPromise: Promise<Record<string, string> | null> | undefined
