@@ -30,6 +30,9 @@ const layer = Layer.effect(
     yield* db.run("PRAGMA cache_size = -64000")
     yield* db.run("PRAGMA foreign_keys = ON")
     yield* db.run("PRAGMA wal_checkpoint(PASSIVE)")
+    // Refresh the planner statistics that the previous session asked for. SQLite recommends
+    // running this on both sides of a connection; it is a no-op when nothing needs updating.
+    yield* db.run("PRAGMA optimize")
     yield* DatabaseMigration.apply(db)
 
     return { db }
