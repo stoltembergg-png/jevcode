@@ -105,13 +105,12 @@ function showErrors(input: {
   })
 }
 
-export const loadGlobalConfigQuery = (scope: ServerScope, sdk: OpencodeClient, protocol?: Promise<ServerProtocol>) =>
+// `global.config.get` is the global config file on both server generations
+// (`/global/config`), so it is not a legacy-only read.
+export const loadGlobalConfigQuery = (scope: ServerScope, sdk: OpencodeClient) =>
   queryOptions({
     queryKey: [scope, "config"],
-    queryFn: async () => {
-      if ((await protocol) !== "v1") return {}
-      return retry(() => sdk.global.config.get().then((x) => x.data!))
-    },
+    queryFn: () => retry(() => sdk.global.config.get().then((x) => x.data!)),
   })
 
 type ProjectApi = {
@@ -379,10 +378,12 @@ export async function bootstrapDirectory(input: {
           .ensureQueryData(loadAgentsQuery(input.scope, input.directory, input.api.agent, input.sdk, input.protocol))
           .then((data) => input.setStore("agent", data)),
       () =>
-        retry(async () => {
-          if ((await input.protocol) !== "v1") return
-          return input.sdk.config.get().then((x) => input.setStore("config", reconcile(x.data!, { merge: false })))
-        }),
+        // The directory-scoped SDK client adds `directory`, and `/config` returns the
+        // server-merged config for that instance on v1 and v2 alike. This is the source
+        // of truth for the child store, replacing the global-only seed above.
+        retry(() =>
+          input.sdk.config.get().then((x) => input.setStore("config", reconcile(x.data!, { merge: false }))),
+        ),
       () =>
         retry(() =>
           (async () => {
