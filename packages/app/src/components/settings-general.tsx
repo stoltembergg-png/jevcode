@@ -699,6 +699,7 @@ export const SettingsGeneral: Component = () => {
         >
           <Button size="small" variant="secondary" disabled={!updater.action().run} onClick={updater.run}>
             {language.t(updater.action().label)}
+            {updater.action().percent !== undefined ? ` ${updater.action().percent}%` : ""}
           </Button>
         </SettingsRow>
       </SettingsList>

@@ -10,7 +10,7 @@ export function updaterAction(state: UpdaterState | undefined) {
     case "checking":
       return { label: "settings.updates.action.checking" as const }
     case "downloading":
-      return { label: "settings.updates.action.downloading" as const }
+      return { label: "settings.updates.action.downloading" as const, percent: state.percent }
     case "ready":
       return { label: "toast.update.action.installRestart" as const, run: "install" as const }
     case "installing":
