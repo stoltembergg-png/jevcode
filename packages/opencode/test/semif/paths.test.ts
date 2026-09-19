@@ -2,14 +2,18 @@ import { describe, expect, test } from "bun:test"
 import path from "node:path"
 import { Global } from "@opencode-ai/core/global"
 import {
+  LIBS_ENV,
   SERVER_ENV,
   SERVER_ENV_FALLBACK,
   downloadsRoot,
   modelDir,
   modelPath,
   partPath,
+  resolveLibsPath,
   resolveModelPath,
   resolveServerPath,
+  runtimeDir,
+  runtimeRoot,
 } from "../../src/semif/paths"
 
 const HASH = "a4d000c7064bd3b2e42c6845836286a899a4e79cf1791da1a6797b58d575957d"
@@ -59,5 +63,16 @@ describe("semif paths", () => {
     )
     expect(downloadsRoot()).toBe(path.join(Global.Path.cache, "semif", "downloads"))
     expect(partPath(HASH)).toBe(path.join(Global.Path.cache, "semif", "downloads", `${HASH}.part`))
+  })
+
+  test("runtime layout lives under data and is keyed by content", () => {
+    expect(runtimeRoot()).toBe(path.join(Global.Path.data, "semif", "runtime"))
+    expect(runtimeDir("abc123")).toBe(path.join(Global.Path.data, "semif", "runtime", "abc123"))
+  })
+
+  test("libs path comes from the dedicated launcher env and ignores blanks", () => {
+    expect(resolveLibsPath({ [LIBS_ENV]: "/resources/semif" })).toBe("/resources/semif")
+    expect(resolveLibsPath({ [LIBS_ENV]: "   " })).toBe(undefined)
+    expect(resolveLibsPath({})).toBe(undefined)
   })
 })

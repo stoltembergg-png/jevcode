@@ -19,6 +19,7 @@ import { SemifAcquire } from "./acquire"
 import { parseSemifOptions, type SemifMode } from "./config"
 import { SemifManifest } from "./manifest"
 import { SemifPaths } from "./paths"
+import { SemifRuntime } from "./runtime"
 import { SemifScoring, type SemifDecision, type SemifDecisionRequest } from "./scoring"
 import { SemifSidecar } from "./sidecar"
 import { SemifWarmup } from "./warmup"
@@ -85,6 +86,7 @@ export class Service extends Context.Service<Service, Interface>()("@opencode/Se
 const errorMessage = (cause: unknown): string => {
   if (cause instanceof SemifServiceError) return cause.reason
   if (cause instanceof SemifAcquire.AcquireError) return cause.reason
+  if (cause instanceof SemifRuntime.RuntimeError) return cause.reason
   if (cause instanceof SemifSidecar.SidecarError) return cause.reason
   return cause instanceof Error ? cause.message : String(cause)
 }
@@ -151,6 +153,7 @@ const layer = Layer.effect(
             })
           : undefined,
         serverPath: SemifPaths.resolveServerPath({ configPath: resolved.serverPath }),
+        libsPath: SemifPaths.resolveLibsPath(),
       }
     })
 
@@ -233,6 +236,16 @@ const layer = Layer.effect(
         return yield* new SemifServiceError({ reason: "semif: no model path resolved" })
       }
       yield* Ref.update(state, (value) => ({ ...value, status: "starting" as SemifStatus }))
+      // Colocate the launcher and its libraries before spawning: the ggml loader
+      // only finds its backends next to the executable. Without a libs directory
+      // (unbundled/dev) this is a passthrough to the resolved binary.
+      const runtime = yield* SemifRuntime.materialize({
+        serverPath: loaded.serverPath,
+        libsPath: loaded.libsPath,
+      }).pipe(
+        Effect.provideService(FileSystem.FileSystem, fs),
+        Effect.mapError((cause) => new SemifServiceError({ reason: errorMessage(cause) })),
+      )
       const handle = yield* provideSidecar(
         SemifSidecar.ensure({
           host: loaded.resolved.host,
@@ -240,7 +253,7 @@ const layer = Layer.effect(
           threads: loaded.resolved.threads,
           contextSize: loaded.resolved.contextSize,
           loadTimeoutMs: loaded.resolved.loadTimeoutMs,
-          serverPath: loaded.serverPath,
+          serverPath: runtime.serverPath,
           modelPath: loaded.modelPath,
         }),
       ).pipe(Effect.mapError((cause) => new SemifServiceError({ reason: errorMessage(cause) })))
