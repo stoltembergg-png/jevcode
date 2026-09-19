@@ -346,10 +346,9 @@ export function StatusPopoverBody(props: { shown: Accessor<boolean> }) {
   const [semifOptimistic, setSemifOptimistic] = createSignal<SemifMode | undefined>(undefined)
   const semifQuery = useQuery(() => ({
     ...queryOptions().semif(),
-    enabled: protocol() === "v2",
   }))
   const semifStatus = () => semifQuery.data
-  const semifAvailable = () => protocol() === "v2" && semifStatus() !== undefined
+  const semifAvailable = () => semifStatus() !== undefined
   const semifMode = createMemo<SemifMode>(() => semifOptimistic() ?? semifStatus()?.mode ?? "auto")
   const semifProgressPercent = createMemo(() => semifPercent(semifStatus()))
   const showSemifModeControl = () => semifStatus()?.status !== "unsupported"

@@ -160,7 +160,10 @@ const isSemifActive = (status: SemifStatus["status"] | undefined) =>
 export const loadSemifStatusQuery = (scope: ServerScope, sdk: OpencodeClient) =>
   queryOptions({
     queryKey: [scope, "semif"] as const,
-    queryFn: () => sdk.semif.status().then((r) => r.data),
+    queryFn: () =>
+      // Legacy v1 servers do not serve /semif/*; surface that as "no data" so the
+      // popover falls back instead of leaving the query in an error state.
+      sdk.semif.status().then((r) => r.data).catch(() => undefined),
     refetchInterval: (query) => (isSemifActive(query.state.data?.status) ? 1500 : false),
   })
 
