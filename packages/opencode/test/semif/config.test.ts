@@ -43,7 +43,7 @@ describe("semif config", () => {
       expect(cfg.threads).toBe(expectedThreads)
       expect(cfg.contextSize).toBe(2048)
       expect(cfg.nProbs).toBe(256)
-      expect(cfg.loadTimeoutMs).toBe(60000)
+      expect(cfg.loadTimeoutMs).toBe(120000)
       expect(cfg.cacheSize).toBe(128)
       expect(cfg.modelPath).toBeUndefined()
       expect(cfg.serverPath).toBeUndefined()

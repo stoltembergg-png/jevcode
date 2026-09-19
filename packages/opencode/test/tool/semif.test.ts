@@ -19,10 +19,10 @@ const READY: Status = {
   adopted: false,
   pid: 1234,
   model: {
-    id: "LiquidAI/LFM2-350M-GGUF",
-    filename: "LFM2-350M-Q4_K_M.gguf",
-    sha256: "a4d000c7064bd3b2e42c6845836286a899a4e79cf1791da1a6797b58d575957d",
-    bytes: 229_309_376,
+    id: "LiquidAI/LFM2-1.2B-GGUF",
+    filename: "LFM2-1.2B-Q4_K_M.gguf",
+    sha256: "55175400e3f509a9616227afeffd58d87e80b9f628a5d3d54ada884d85221fed",
+    bytes: 730_893_248,
     quant: "Q4_K_M",
   },
 }
@@ -47,7 +47,7 @@ const RECORD: SemifDecision = {
   input_tokens: 116,
   prompt_sha256: "abc",
   prompt_version: "direct-options-v1",
-  model: { source: "LiquidAI/LFM2-350M", revision: "Q4_K_M", server: "llama.cpp b11040" },
+  model: { source: "LiquidAI/LFM2-1.2B", revision: "Q4_K_M", server: "llama.cpp b11040" },
   probability_status: "conditional option score; uncalibrated as decision confidence",
   readout: "llama.cpp server top-k next-token logprobs at declared answer slots",
   forward_seconds: 0.2,
