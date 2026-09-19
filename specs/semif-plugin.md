@@ -1,6 +1,6 @@
 # SemIf — Plugin de decisões semânticas locais para o NextCode
 
-Status: **implementado como plugin externo** (fase de estudo), candidata a promoção a recurso nativo.
+Status: **promovido a recurso nativo do servidor** (2026-09-18); o plugin externo continua no repo apenas como referência de desenvolvimento. Ver a seção 9 para o desenho nativo e o que falta.
 Data: 2026-09-18 · Autoria: estudo conjunto com assistente IA.
 
 ---
@@ -250,3 +250,54 @@ novas além de `@opencode-ai/plugin` (workspace) e `node:` builtins.
 6. **Testes nativos**: trazer `test.ts` para `packages/semif/test` (Bun test), com
    fixture GGUF pequena e porta randômica; CI com runner Windows/macOS.
 7. **Documentação**: esta spec é a base; adicionar seção no `README.md` do repo.
+
+---
+
+## 9. Implementação nativa (2026-09-18)
+
+O SemIf deixou de ser plugin externo e passou a ser **recurso nativo do servidor**. O plugin em
+`plugins/semif/` permanece no repo apenas como referência de desenvolvimento; o
+`.opencode/opencode.jsonc` do repo não o carrega mais.
+
+### Onde vive
+
+| Peça | Caminho |
+|---|---|
+| Núcleo puro (scoring/config) | `packages/opencode/src/semif/{scoring,config}.ts` |
+| Aquisição do modelo (resumível, SHA256) | `packages/opencode/src/semif/{manifest,acquire,paths}.ts` |
+| Sidecar llama-server (adoção/porta/dispose) | `packages/opencode/src/semif/sidecar.ts` |
+| Runtime co-localizado (launcher + libs) | `packages/opencode/src/semif/runtime.ts` |
+| Serviço global + warm-up | `packages/opencode/src/semif/{service,warmup}.ts` |
+| Tools nativas | `packages/opencode/src/tool/semif.ts` |
+| Config tipada (core) | `packages/core/src/v1/config/semif.ts` |
+| Rotas globais | `GET /semif/status`, `POST /semif/start`, `POST /semif/acquire` |
+| UI | aba SemIf no popover de status (`packages/app/src/components/status-popover-body.tsx`) |
+| Vendorização (build/CI) | `packages/opencode/script/fetch-semif-server.ts` + `semif-server.lock.json` |
+
+### Contrato e comportamento
+
+- **Escopo**: global do processo — um modelo e um servidor por máquina, iguais em todos os projetos.
+- **Env do shell**: `NEXTCODE_SEMIF_SERVER_PATH` (launcher vendorizado) e `NEXTCODE_SEMIF_LIBS_PATH`
+  (diretório das libs). Sem eles, o serviço cai para `semi.server_path`/`SEMIF_SERVER_PATH` e para o
+  irmão do executável quando existir (dev).
+- **Runtime co-localizado**: o `llama-server` do llama.cpp carrega os backends ggml **do diretório do
+  executável**; `PATH` e `GGML_BACKEND_PATH` não bastam. Por isso o serviço materializa
+  `<data>/semif/runtime/<key>/` com o launcher + todas as libs (hardlink quando possível) e spawna de lá.
+- **Modelo**: pinado em `manifest.ts` (LFM2-350M Q4_K_M, 229.309.376 bytes, SHA256 verificado), baixado
+  em `<data>/semif/models/<sha256[:12]>/`, parcial em `<cache>/semif/downloads/<sha256>.part`, `Range`
+  com retomada e rename atômico. Política `download: auto | manual | never`.
+- **Ciclo de vida**: `mode: auto` dispara o warm-up após o boot (não bloqueante); `lazy` prepara na
+  primeira decisão; `off` desabilita. O sidecar **adota** um servidor já saudável com o mesmo modelo,
+  usa `port+1..+10` quando a porta está ocupada e mata somente o que ele mesmo spawnou.
+- **Tools**: `semif_status` e `semif_decide`; quando o modelo ainda não está pronto, `semif_decide`
+  devolve estado + progresso e dispara a preparação em background (nunca bloqueia minutos).
+- **UI**: a aba lê `GET /semif/status` (polling de 1,5 s só em estados transitórios) e grava o modo no
+  **config global** (`config.semif.mode`), não mais no config do projeto.
+
+### Pendências conhecidas
+
+1. **macOS**: validar num smoke real a co-localização/assinatura do launcher + dylibs (hardlink preserva
+   a assinatura; o fallback de cópia pode perder xattrs).
+2. **Progresso**: a UI usa polling; um evento de status dedicado (schema + bus) é a evolução natural.
+3. **Roadmap**: GC de `<data>/semif/runtime/<key>` antigos e variantes CUDA/Vulkan opcionais.
+
