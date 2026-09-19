@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { availableParallelism } from "node:os"
-import { assertSemifPaths, checkSemifPaths, parseSemifOptions } from "../../src/semif/config"
+import { assertSemifPaths, checkSemifPaths, fromConfig, parseSemifOptions } from "../../src/semif/config"
 
 const ENV_KEYS = [
   "SEMIF_MODE",
@@ -157,5 +157,53 @@ describe("semif config", () => {
 
   test("assertSemifPaths rejects when paths are unconfigured", async () => {
     await expect(assertSemifPaths(parseSemifOptions())).rejects.toThrow(/modelPath is not configured/)
+  })
+})
+
+describe("semif fromConfig", () => {
+  test("an absent config block disables the feature", () => {
+    expect(fromConfig(undefined).mode).toBe("off")
+  })
+
+  test("maps core config fields (snake_case paths) to runtime options", async () => {
+    await withEnv({}, () => {
+      const resolved = fromConfig({
+        mode: "lazy",
+        download: "manual",
+        host: "0.0.0.0",
+        port: 9000,
+        threads: 5,
+        contextSize: 8192,
+        nProbs: 128,
+        cacheSize: 64,
+        model_path: "/m/model.gguf",
+        server_path: "/b/llama-server",
+      })
+      expect(resolved.mode).toBe("lazy")
+      expect(resolved.host).toBe("0.0.0.0")
+      expect(resolved.port).toBe(9000)
+      expect(resolved.threads).toBe(5)
+      expect(resolved.contextSize).toBe(8192)
+      expect(resolved.nProbs).toBe(128)
+      expect(resolved.cacheSize).toBe(64)
+      expect(resolved.modelPath).toBe("/m/model.gguf")
+      expect(resolved.serverPath).toBe("/b/llama-server")
+    })
+  })
+
+  test("config values win, env fills the gaps the config leaves open", async () => {
+    await withEnv({ SEMIF_PORT: "1111", SEMIF_MODEL_PATH: "/env/model.gguf" }, () => {
+      const resolved = fromConfig({
+        mode: "auto",
+        download: "auto",
+        host: "127.0.0.1",
+        port: 8817,
+        contextSize: 2048,
+        nProbs: 256,
+        cacheSize: 128,
+      })
+      expect(resolved.port).toBe(8817)
+      expect(resolved.modelPath).toBe("/env/model.gguf")
+    })
   })
 })

@@ -1,5 +1,6 @@
 import { stat } from "node:fs/promises"
 import { availableParallelism } from "node:os"
+import type { ConfigSemifV1 } from "@opencode-ai/core/v1/config/semif"
 
 export type SemifMode = "auto" | "lazy" | "off"
 
@@ -136,6 +137,24 @@ export function parseSemifOptions(raw?: unknown): SemifResolved {
     modelPath,
     serverPath,
   }
+}
+
+// Bridge the native core config block (snake_case, Effect Schema) into the
+// runtime options this module consumes. Env vars still fill gaps via
+// parseSemifOptions; an absent semif block means the feature is disabled.
+export function fromConfig(semif?: ConfigSemifV1.Info): SemifResolved {
+  if (!semif) return parseSemifOptions({ mode: "off" })
+  return parseSemifOptions({
+    mode: semif.mode,
+    host: semif.host,
+    port: semif.port,
+    threads: semif.threads,
+    contextSize: semif.contextSize,
+    nProbs: semif.nProbs,
+    cacheSize: semif.cacheSize,
+    modelPath: semif.model_path,
+    serverPath: semif.server_path,
+  })
 }
 
 async function pathExists(path: string | undefined): Promise<boolean> {
