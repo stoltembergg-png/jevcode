@@ -102,6 +102,11 @@ export const dict = {
   "ui.sessionTurn.status.thinkingWithTopic": "Размышление - {{topic}}",
   "ui.sessionTurn.status.gatheringThoughts": "Сбор мыслей",
   "ui.sessionTurn.status.consideringNextSteps": "Рассмотрение следующих шагов",
+  "ui.sessionTurn.thinking.decisions.one": "{{count}} решение",
+  "ui.sessionTurn.thinking.decisions.few": "{{count}} решения",
+  "ui.sessionTurn.thinking.decisions.many": "{{count}} решений",
+  "ui.sessionTurn.thinking.decisions.other": "{{count}} решений",
+  "ui.sessionTurn.thinking.tokens": "{{tokens}} токенов",
 
   "ui.messagePart.questions.dismissed": "Вопросы отклонены",
   "ui.messagePart.compaction": "Сессия сжата",

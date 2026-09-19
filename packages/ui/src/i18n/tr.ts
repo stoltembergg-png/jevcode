@@ -107,6 +107,9 @@ export const dict = {
   "ui.sessionTurn.status.thinkingWithTopic": "Düşünüyor - {{topic}}",
   "ui.sessionTurn.status.gatheringThoughts": "Düşünceler toplanıyor",
   "ui.sessionTurn.status.consideringNextSteps": "Sonraki adımlar değerlendiriliyor",
+  "ui.sessionTurn.thinking.decisions.one": "{{count}} karar",
+  "ui.sessionTurn.thinking.decisions.other": "{{count}} karar",
+  "ui.sessionTurn.thinking.tokens": "{{tokens}} token",
 
   "ui.messagePart.questions.dismissed": "Sorular kapatıldı",
   "ui.messagePart.compaction": "Oturum sıkıştırıldı",

@@ -77,6 +77,9 @@ export const dict = {
   "ui.sessionTurn.status.thinkingWithTopic": "생각 중 - {{topic}}",
   "ui.sessionTurn.status.gatheringThoughts": "생각 정리 중",
   "ui.sessionTurn.status.consideringNextSteps": "다음 단계 고려 중",
+  "ui.sessionTurn.thinking.decisions.one": "{{count}} decision",
+  "ui.sessionTurn.thinking.decisions.other": "{{count}}개의 결정",
+  "ui.sessionTurn.thinking.tokens": "{{tokens}} 토큰",
 
   "ui.messagePart.questions.dismissed": "질문 무시됨",
   "ui.messagePart.compaction": "세션 압축됨",

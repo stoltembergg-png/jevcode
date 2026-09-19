@@ -15,12 +15,12 @@ import { createEffect, createMemo, createSignal, For, on, ParentProps, Show } fr
 import { createStore } from "solid-js/store"
 import { Dynamic } from "solid-js/web"
 import { AssistantParts, Message, MessageDivider, PART_MAPPING, type UserActions } from "./message-part"
+import { ThinkingStatus } from "./thinking-status"
 import { Card } from "@opencode-ai/ui/card"
 import { Accordion } from "@opencode-ai/ui/accordion"
 import { StickyAccordionHeader } from "@opencode-ai/ui/sticky-accordion-header"
 import { DiffChanges } from "@opencode-ai/ui/diff-changes"
 import { Icon } from "@opencode-ai/ui/icon"
-import { TextShimmer } from "@opencode-ai/ui/text-shimmer"
 import { SessionRetry } from "./session-retry"
 import { TextReveal } from "@opencode-ai/ui/text-reveal"
 import { createAutoScroll } from "@opencode-ai/ui/hooks"
@@ -421,7 +421,11 @@ export function SessionTurn(
               </Show>
               <Show when={showThinking()}>
                 <div data-slot="session-turn-thinking">
-                  <TextShimmer text={i18n.t("ui.sessionTurn.status.thinking")} />
+                  <ThinkingStatus
+                    active={working()}
+                    pendingMessage={pending()}
+                    parts={pending() ? list(data.store.part?.[pending()!.id], emptyParts) : emptyParts}
+                  />
                   <Show when={!showReasoningSummaries()}>
                     <TextReveal
                       text={reasoningHeading()}

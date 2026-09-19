@@ -103,6 +103,10 @@ export const dict = {
   "ui.sessionTurn.status.thinkingWithTopic": "Réflexion - {{topic}}",
   "ui.sessionTurn.status.gatheringThoughts": "Rassemblement des idées",
   "ui.sessionTurn.status.consideringNextSteps": "Examen des prochaines étapes",
+  "ui.sessionTurn.thinking.decisions.one": "{{count}} décision",
+  "ui.sessionTurn.thinking.decisions.many": "{{count}} décisions",
+  "ui.sessionTurn.thinking.decisions.other": "{{count}} décisions",
+  "ui.sessionTurn.thinking.tokens": "{{tokens}} tokens",
 
   "ui.messagePart.questions.dismissed": "Questions ignorées",
   "ui.messagePart.compaction": "Session compactée",

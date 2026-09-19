@@ -105,6 +105,13 @@ export const dict = {
   "ui.sessionTurn.status.thinkingWithTopic": "تفكير - {{topic}}",
   "ui.sessionTurn.status.gatheringThoughts": "جمع الأفكار",
   "ui.sessionTurn.status.consideringNextSteps": "النظر في الخطوات التالية",
+  "ui.sessionTurn.thinking.decisions.zero": "{{count}} قرار",
+  "ui.sessionTurn.thinking.decisions.one": "{{count}} قرار",
+  "ui.sessionTurn.thinking.decisions.two": "{{count}} قراران",
+  "ui.sessionTurn.thinking.decisions.few": "{{count}} قرارات",
+  "ui.sessionTurn.thinking.decisions.many": "{{count}} قرارا",
+  "ui.sessionTurn.thinking.decisions.other": "{{count}} قرار",
+  "ui.sessionTurn.thinking.tokens": "{{tokens}} رمز",
 
   "ui.messagePart.questions.dismissed": "تم إهمال الأسئلة",
   "ui.messagePart.compaction": "تم اختصار الجلسة",

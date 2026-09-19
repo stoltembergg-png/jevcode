@@ -1,0 +1,73 @@
+[data-slot="thinking-status"] {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0;
+  min-width: 0;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+
+  [data-slot="thinking-status-label"] {
+    display: inline-flex;
+    align-items: baseline;
+    min-width: 0;
+  }
+
+  [data-slot="thinking-status-stats"] {
+    display: inline-flex;
+    align-items: baseline;
+    min-width: 0;
+    margin-left: 0;
+
+    [data-slot="thinking-status-sep"] {
+      display: inline-block;
+      margin: 0 6px;
+      color: var(--text-weaker);
+      opacity: 0.5;
+      flex-shrink: 0;
+    }
+
+    [data-slot^="thinking-status-stat-"] {
+      display: inline-grid;
+      grid-template-columns: 1fr;
+      align-items: baseline;
+      opacity: 1;
+      filter: blur(0);
+      transform: translateY(0) scale(1);
+      overflow: visible;
+      transform-origin: center;
+      transition-property: grid-template-columns, opacity, filter, transform;
+      transition-duration:
+        var(--motion-fast, 140ms), var(--motion-fast, 140ms), var(--motion-panel, 220ms),
+        var(--motion-panel, 220ms);
+      transition-timing-function:
+        cubic-bezier(0.22, 1, 0.36, 1), ease-out, ease-out, cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    [data-slot^="thinking-status-stat-"][data-active="false"] {
+      grid-template-columns: 0fr;
+      opacity: 0;
+      filter: blur(2px);
+      transform: translateY(-0.06em) scale(0.96);
+      margin-right: 0;
+    }
+
+    [data-slot="thinking-status-stat-inner"] {
+      display: inline-flex;
+      align-items: baseline;
+      min-width: 0;
+      overflow: hidden;
+      white-space: nowrap;
+    }
+  }
+
+  [data-slot="thinking-status-stat-suffix"] {
+    display: inline-block;
+    white-space: pre;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-slot="thinking-status"] [data-slot^="thinking-status-stat-"] {
+    transition-duration: 0ms;
+  }
+}

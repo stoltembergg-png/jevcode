@@ -101,6 +101,9 @@ export const dict = {
   "ui.sessionTurn.status.thinkingWithTopic": "กำลังคิด - {{topic}}",
   "ui.sessionTurn.status.gatheringThoughts": "กำลังรวบรวมความคิด",
   "ui.sessionTurn.status.consideringNextSteps": "กำลังพิจารณาขั้นตอนถัดไป",
+  "ui.sessionTurn.thinking.decisions.one": "{{count}} decision",
+  "ui.sessionTurn.thinking.decisions.other": "{{count}} decisions",
+  "ui.sessionTurn.thinking.tokens": "{{tokens}} tokens",
 
   "ui.messagePart.questions.dismissed": "ละทิ้งคำถามแล้ว",
   "ui.messagePart.compaction": "บีบอัดเซสชันแล้ว",
