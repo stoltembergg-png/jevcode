@@ -45,6 +45,12 @@ export interface Models {
   readonly quant: string
 }
 
+export interface Choice {
+  readonly id: string
+  readonly label: string
+  readonly quant: string
+}
+
 export interface Progress {
   readonly received: number
   readonly total: number | undefined
@@ -55,6 +61,7 @@ export interface Status {
   readonly mode: SemifMode
   readonly download: DownloadPolicy
   readonly model?: Models
+  readonly choices: readonly Choice[]
   readonly modelPath?: string
   readonly serverPath?: string
   readonly host: string
@@ -190,6 +197,11 @@ const layer = Layer.effect(
               quant: loaded.entry.quant,
             }
           : undefined,
+        choices: SemifManifest.CHOICES.map((entry) => ({
+          id: entry.id,
+          label: entry.label,
+          quant: entry.quant,
+        })),
         modelPath: loaded.modelPath,
         serverPath: loaded.serverPath,
         progress: live.progress,

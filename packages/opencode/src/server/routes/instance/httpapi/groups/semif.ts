@@ -13,6 +13,12 @@ const ModelInfo = Schema.Struct({
   quant: Schema.String,
 })
 
+const ModelChoice = Schema.Struct({
+  id: Schema.String,
+  label: Schema.String,
+  quant: Schema.String,
+})
+
 const Progress = Schema.Struct({
   received: Schema.Number,
   total: Schema.optional(Schema.Number),
@@ -36,6 +42,7 @@ export const SemifStatusSchema = Schema.Struct({
   mode: ConfigSemifV1.Mode,
   download: ConfigSemifV1.Download,
   model: Schema.optional(ModelInfo),
+  choices: Schema.Array(ModelChoice),
   modelPath: Schema.optional(Schema.String),
   serverPath: Schema.optional(Schema.String),
   host: Schema.String,

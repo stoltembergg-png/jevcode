@@ -7,6 +7,7 @@ import { MoveSession } from "@opencode-ai/core/control-plane/move-session"
 import { Auth } from "../../src/auth"
 import { Config } from "../../src/config/config"
 import { Installation } from "../../src/installation"
+import { CHOICES } from "../../src/semif/manifest"
 import { SemifService, type Status } from "../../src/semif/service"
 import { ServerAuth } from "../../src/server/auth"
 import { RootHttpApi } from "../../src/server/routes/instance/httpapi/api"
@@ -21,6 +22,8 @@ import { testEffect } from "../lib/effect"
 
 // The SemIf service owns one model per machine, so these routes are mounted on
 // the server-level root API. No instance or workspace context is involved.
+const choices = CHOICES.map((entry) => ({ id: entry.id, label: entry.label, quant: entry.quant }))
+
 const PENDING: Status = {
   status: "downloading",
   mode: "auto",
@@ -28,6 +31,7 @@ const PENDING: Status = {
   host: "127.0.0.1",
   port: 8817,
   adopted: false,
+  choices,
   progress: { received: 37, total: 100 },
 }
 
@@ -38,6 +42,7 @@ const READY: Status = {
   host: "127.0.0.1",
   port: 8817,
   adopted: false,
+  choices,
   pid: 4242,
 }
 
@@ -87,6 +92,7 @@ describe("semif HttpApi", () => {
         port: 8817,
         adopted: false,
         progress: { received: 37, total: 100 },
+        choices,
       })
     }),
   )

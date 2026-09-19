@@ -3,12 +3,15 @@ import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { Effect, Layer, Ref } from "effect"
 import { Agent } from "../../src/agent/agent"
 import { SessionID, MessageID } from "../../src/session/schema"
-import { SemifService, type Status } from "../../src/semif/service"
+import { SemifService, type Status } from "@/semif/service"
 import type { SemifDecision } from "../../src/semif/scoring"
+import { CHOICES } from "../../src/semif/manifest"
 import { Truncate } from "@/tool/truncate"
 import { SemifDecideTool, SemifStatusTool } from "@/tool/semif"
 import { Tool } from "@/tool/tool"
 import { pollWithTimeout, testEffect } from "../lib/effect"
+
+const choices = CHOICES.map((entry) => ({ id: entry.id, label: entry.label, quant: entry.quant }))
 
 const READY: Status = {
   status: "ready",
@@ -17,6 +20,7 @@ const READY: Status = {
   host: "127.0.0.1",
   port: 8817,
   adopted: false,
+  choices,
   pid: 1234,
   model: {
     id: "LiquidAI/LFM2-1.2B-GGUF",
@@ -34,6 +38,7 @@ const PENDING: Status = {
   host: "127.0.0.1",
   port: 8817,
   adopted: false,
+  choices,
   progress: { received: 37, total: 100 },
 }
 
@@ -74,6 +79,7 @@ const LAZY: Status = {
   host: "127.0.0.1",
   port: 8817,
   adopted: false,
+  choices,
 }
 
 const lazyStarts = Effect.runSync(Ref.make(0))

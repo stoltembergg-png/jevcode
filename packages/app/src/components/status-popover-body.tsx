@@ -364,6 +364,11 @@ export function StatusPopoverBody(props: { shown: Accessor<boolean> }) {
   )
   const semifProgressPercent = createMemo(() => semifPercent(semifStatus()))
   const showSemifModeControl = () => semifStatus()?.status !== "unsupported"
+  const semifChoices = createMemo(() => {
+    const fromStatus = semifStatus()?.choices
+    if (fromStatus && fromStatus.length > 0) return fromStatus
+    return SEMIF_MODEL_CHOICES
+  })
   const semifBusy = () =>
     semifPending() ||
     semifActionPending() ||
@@ -733,45 +738,43 @@ export function StatusPopoverBody(props: { shown: Accessor<boolean> }) {
                     </Match>
                   </SwitchView>
 
-                  <Show when={showSemifModeControl()}>
-                    <div class="flex flex-col gap-1.5">
-                      <span class="text-12-regular text-text-weak">{language.t("semif.model.label")}</span>
-                      <div
-                        data-action="semif-model"
-                        role="group"
-                        aria-label={language.t("semif.model.label")}
-                        class="flex flex-col gap-0.5 p-0.5 rounded-md bg-surface-inset-base"
-                      >
-                        <For each={SEMIF_MODEL_CHOICES}>
-                          {(choice) => {
-                            const selected = () => semifModelId() === choice.id
-                            return (
-                              <button
-                                type="button"
-                                aria-pressed={selected()}
-                                disabled={semifBusy()}
-                                class="inline-flex w-full min-w-0 items-center justify-between gap-2 h-7 px-2 rounded-sm text-12-regular transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-border-focus disabled:cursor-not-allowed disabled:opacity-50"
-                                classList={{
-                                  "bg-button-secondary-base text-text-strong shadow-[var(--shadow-xs-border-base)]":
-                                    selected(),
-                                  "text-text-weak hover:text-text-base hover:bg-surface-inset-base-hover":
-                                    !selected() && !semifBusy(),
-                                }}
-                                onClick={() => void setSemifModel(choice.id)}
-                              >
-                                <span class="min-w-0 truncate">{choice.label}</span>
-                                <Show when={choice.id === SEMIF_DEFAULT_MODEL}>
-                                  <span class="text-11-regular text-text-weak shrink-0">
-                                    {language.t("common.default")}
-                                  </span>
-                                </Show>
-                              </button>
-                            )
-                          }}
-                        </For>
-                      </div>
+                  <div class="flex flex-col gap-1.5">
+                    <span class="text-12-regular text-text-weak">{language.t("semif.model.label")}</span>
+                    <div
+                      data-action="semif-model"
+                      role="group"
+                      aria-label={language.t("semif.model.label")}
+                      class="flex flex-col gap-0.5 p-0.5 rounded-md bg-surface-inset-base"
+                    >
+                      <For each={semifChoices()}>
+                        {(choice) => {
+                          const selected = () => semifModelId() === choice.id
+                          return (
+                            <button
+                              type="button"
+                              aria-pressed={selected()}
+                              disabled={semifBusy()}
+                              class="inline-flex w-full min-w-0 items-center justify-between gap-2 h-7 px-2 rounded-sm text-12-regular transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-border-focus disabled:cursor-not-allowed disabled:opacity-50"
+                              classList={{
+                                "bg-button-secondary-base text-text-strong shadow-[var(--shadow-xs-border-base)]":
+                                  selected(),
+                                "text-text-weak hover:text-text-base hover:bg-surface-inset-base-hover":
+                                  !selected() && !semifBusy(),
+                              }}
+                              onClick={() => void setSemifModel(choice.id)}
+                            >
+                              <span class="min-w-0 truncate">{choice.label}</span>
+                              <Show when={choice.id === SEMIF_DEFAULT_MODEL}>
+                                <span class="text-11-regular text-text-weak shrink-0">
+                                  {language.t("common.default")}
+                                </span>
+                              </Show>
+                            </button>
+                          )
+                        }}
+                      </For>
                     </div>
-                  </Show>
+                  </div>
 
                   <Show when={showSemifModeControl()}>
                     <div
