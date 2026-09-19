@@ -11,7 +11,7 @@ import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { filesystem, httpClient } from "@opencode-ai/core/effect/app-node-platform"
 import { CrossSpawnSpawner } from "@opencode-ai/core/cross-spawn-spawner"
 import { makeRuntime } from "@opencode-ai/core/effect/runtime"
-import { Context, Effect, FileSystem, Layer, Ref, Schema, Scope } from "effect"
+import { Context, Effect, Exit, FileSystem, Layer, Ref, Schema, Scope, Semaphore } from "effect"
 import { ChildProcessSpawner } from "effect/unstable/process"
 import { HttpClient } from "effect/unstable/http"
 import { Config } from "@/config/config"
@@ -21,6 +21,7 @@ import { SemifManifest } from "./manifest"
 import { SemifPaths } from "./paths"
 import { SemifScoring, type SemifDecision, type SemifDecisionRequest } from "./scoring"
 import { SemifSidecar } from "./sidecar"
+import { SemifWarmup } from "./warmup"
 
 export type SemifStatus =
   | "unsupported"
@@ -104,6 +105,9 @@ const layer = Layer.effect(
     const scope = yield* Effect.scope
     const state = yield* Ref.make<State>({ status: "offline" })
     const live: { progress?: Progress } = {}
+    // Serializes concurrent starts (boot warm-up vs. explicit `start`) so two
+    // callers can never race port probing and spawn two sidecars.
+    const startLock = yield* Semaphore.make(1)
 
     const provideAcquire = <A, E>(effect: Effect.Effect<A, E, FileSystem.FileSystem | HttpClient.HttpClient>) =>
       effect.pipe(
@@ -214,7 +218,7 @@ const layer = Layer.effect(
       return result
     })
 
-    const ensureHandle = Effect.gen(function* () {
+    const acquireHandle = Effect.gen(function* () {
       const loaded = yield* load
       const current = yield* Ref.get(state)
       if (current.handle) return current.handle
@@ -244,6 +248,8 @@ const layer = Layer.effect(
       return handle
     })
 
+    const ensureHandle = startLock.withPermits(1)(acquireHandle)
+
     const markFailed = (cause: unknown) =>
       Ref.update(state, (value) => ({ ...value, status: "failed" as SemifStatus, error: errorMessage(cause) }))
 
@@ -251,6 +257,11 @@ const layer = Layer.effect(
       status: () => snapshot,
       start: () =>
         Effect.gen(function* () {
+          const loaded = yield* load
+          // Without a supported model or a server binary there is nothing to
+          // start; report the computed status instead of turning it into
+          // `failed`.
+          if (!loaded.entry || !loaded.serverPath) return yield* snapshot
           yield* ensureHandle
           return yield* snapshot
         }).pipe(
@@ -296,6 +307,27 @@ const layer = Layer.effect(
           yield* Ref.set(state, { status: "offline" as SemifStatus })
         }),
     }
+
+    // Warm up when the config opts in. This layer is memoized by the app-node
+    // graph, so normally the fork below happens once; even if a listener is
+    // rebuilt, `start` is serialized by `startLock` in-process and acquisition
+    // takes the cross-process `Flock`, while the sidecar adopts an already
+    // healthy server. Readiness never blocks the boot: the fiber is detached
+    // into the layer scope and every failure is logged.
+    const bootWarmup = Effect.gen(function* () {
+      const loaded = yield* load
+      yield* SemifWarmup.run(
+        { mode: loaded.resolved.mode, download: loaded.download },
+        result.start().pipe(Effect.asVoid),
+      )
+    })
+    yield* bootWarmup.pipe(
+      Effect.exit,
+      Effect.tap((exit) =>
+        Exit.isFailure(exit) ? Effect.logWarning("semif warm-up setup failed", { cause: exit.cause }) : Effect.void,
+      ),
+      Effect.forkIn(scope),
+    )
 
     return Service.of(result)
   }),

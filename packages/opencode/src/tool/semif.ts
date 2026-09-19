@@ -1,5 +1,6 @@
 import { Effect, Schema } from "effect"
 import { SemifService } from "@/semif/service"
+import { SemifWarmup } from "@/semif/warmup"
 import * as Tool from "./tool"
 
 export const SemifOption = Schema.Struct({
@@ -62,11 +63,13 @@ function readiness(status: SemifService.Status): string {
   }
 }
 
-function notReadyOutput(status: SemifService.Status): string {
+function notReadyOutput(status: SemifService.Status, preparing: boolean): string {
   return [
     `semif is not ready (status=${status.status}): ${readiness(status)}.`,
     `Progress: ${JSON.stringify(status.progress ?? null)}`,
-    "Poll semif_status for readiness, or POST /semif/start to load the model explicitly.",
+    preparing
+      ? "Preparing the model in the background; poll semif_status for progress."
+      : "Poll semif_status for readiness, or POST /semif/start to load the model explicitly.",
   ].join("\n")
 }
 
@@ -118,9 +121,14 @@ export const SemifDecideTool = Tool.define<typeof SemifDecideParameters, DecideM
 
           const status = yield* service.status()
           if (status.status !== "ready") {
+            const preparing = SemifWarmup.shouldPrepare(status)
+            // `lazy` prepares on first use. Never block the decision on a
+            // download or a cold model load: kick preparation in the background
+            // and report the current state/progress immediately.
+            if (preparing) yield* service.start().pipe(Effect.ignore, Effect.forkDetach)
             return {
               title: `semif: ${status.status}`,
-              output: notReadyOutput(status),
+              output: notReadyOutput(status, preparing),
               metadata: { status: status.status },
             }
           }

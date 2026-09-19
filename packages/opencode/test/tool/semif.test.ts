@@ -1,6 +1,6 @@
 import { describe, expect } from "bun:test"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
-import { Effect, Layer } from "effect"
+import { Effect, Layer, Ref } from "effect"
 import { Agent } from "../../src/agent/agent"
 import { SessionID, MessageID } from "../../src/session/schema"
 import { SemifService, type Status } from "../../src/semif/service"
@@ -8,7 +8,7 @@ import type { SemifDecision } from "../../src/semif/scoring"
 import { Truncate } from "@/tool/truncate"
 import { SemifDecideTool, SemifStatusTool } from "@/tool/semif"
 import { Tool } from "@/tool/tool"
-import { testEffect } from "../lib/effect"
+import { pollWithTimeout, testEffect } from "../lib/effect"
 
 const READY: Status = {
   status: "ready",
@@ -66,6 +66,29 @@ const makeLayer = (status: Status, decide: SemifService.Interface["decide"]) =>
       }),
     ],
   ])
+
+const LAZY: Status = {
+  status: "not_downloaded",
+  mode: "lazy",
+  download: "auto",
+  host: "127.0.0.1",
+  port: 8817,
+  adopted: false,
+}
+
+const lazyStarts = Effect.runSync(Ref.make(0))
+const lazyIt = testEffect(
+  LayerNode.compile(LayerNode.group([Truncate.node, Agent.node, SemifService.node]), [
+    [
+      SemifService.node,
+      Layer.mock(SemifService.Service)({
+        status: () => Effect.succeed(LAZY),
+        start: () =>
+          Ref.update(lazyStarts, (count) => count + 1).pipe(Effect.as(LAZY)),
+      }),
+    ],
+  ]),
+)
 
 const readyIt = testEffect(makeLayer(READY, () => Effect.succeed(RECORD)))
 const pendingIt = testEffect(
@@ -145,6 +168,20 @@ describe("semif tools", () => {
       expect(result.output).toContain("not ready")
       expect(result.output).toContain("37%")
       expect(result.metadata).toMatchObject({ status: "downloading" })
+    }),
+  )
+
+  lazyIt.instance("semif_decide kicks lazy preparation in the background without blocking", () =>
+    Effect.gen(function* () {
+      const tool = yield* Tool.init(yield* SemifDecideTool)
+      const result = yield* tool.execute({ state: "s", question: "q", options }, makeCtx())
+
+      expect(result.title).toBe("semif: not_downloaded")
+      expect(result.output).toContain("Preparing the model in the background")
+      yield* pollWithTimeout(
+        Ref.get(lazyStarts).pipe(Effect.map((count) => (count > 0 ? count : undefined))),
+        "semif start was never kicked",
+      )
     }),
   )
 
