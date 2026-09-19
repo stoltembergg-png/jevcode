@@ -152,9 +152,11 @@ fn http_health(port: u16, password: &str) -> Result<u16, String> {
 ///
 /// `llama-server` travels as a Tauri `externalBin` (next to the main executable),
 /// while its shared libraries travel as the `semif` resource directory. The
-/// loader needs that directory on its search path: `PATH` on Windows and
-/// `DYLD_FALLBACK_LIBRARY_PATH` on macOS (the vendored dylibs resolve via
-/// `@rpath`, which falls back to that variable).
+/// server sidecar materializes a runtime directory with both files colocated,
+/// because the ggml backend loader only scans the executable's directory;
+/// `PATH`/`GGML_BACKEND_PATH` do not make it load the backends. The libs path is
+/// still handed over explicitly so the sidecar knows where to link/copy from,
+/// and `PATH`/`DYLD_FALLBACK_LIBRARY_PATH` remain as a secondary hint.
 fn semif_sidecar_env(app: &AppHandle) -> Option<Vec<(&'static str, String)>> {
     let server_name = if cfg!(target_os = "windows") {
         "llama-server.exe"
@@ -177,13 +179,14 @@ fn semif_sidecar_env(app: &AppHandle) -> Option<Vec<(&'static str, String)>> {
     let existing = std::env::var(key).unwrap_or_default();
     let libs = libs.to_string_lossy().to_string();
     let value = if existing.is_empty() {
-        libs
+        libs.clone()
     } else {
         format!("{libs}{separator}{existing}")
     };
     log::info!("[shell] vendored llama-server at {}", server.display());
     Some(vec![
         ("NEXTCODE_SEMIF_SERVER_PATH", server.to_string_lossy().to_string()),
+        ("NEXTCODE_SEMIF_LIBS_PATH", libs),
         (key, value),
     ])
 }
@@ -1597,8 +1600,7 @@ fn main() {
   try {
     const appExists = await invoke("check_app_exists", { appName: "explorer.exe" });
     const appPath = await invoke("resolve_app_path", { appName: "cmd" });
-    const revealed = await invoke("reveal_path", { path: "D:\\Projetos\\JevCode\\package.json" });
-    await invoke("log_stub", { message: "shell self-test " + JSON.stringify({ appExists, appPath, revealed }) });
+    await invoke("log_stub", { message: "shell self-test " + JSON.stringify({ appExists, appPath }) });
   } catch (error) {
     await invoke("log_stub", { message: "shell self-test failed " + String(error) });
   }

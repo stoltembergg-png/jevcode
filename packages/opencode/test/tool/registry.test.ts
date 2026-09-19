@@ -118,6 +118,16 @@ describe("tool.registry", () => {
     }),
   )
 
+  it.instance("exposes the native semif tools", () =>
+    Effect.gen(function* () {
+      const registry = yield* ToolRegistry.Service
+      const ids = yield* registry.ids()
+
+      expect(ids).toContain("semif_status")
+      expect(ids).toContain("semif_decide")
+    }),
+  )
+
   withCodeMode.instance("exposes execute when code mode is enabled", () =>
     Effect.gen(function* () {
       const registry = yield* ToolRegistry.Service
