@@ -1,6 +1,6 @@
 # SemIf — Plugin de decisões semânticas locais para o NextCode
 
-Status: **promovido a recurso nativo do servidor** (2026-09-18); o plugin externo continua no repo apenas como referência de desenvolvimento. Ver a seção 9 para o desenho nativo e o que falta.
+Status: **promovido a recurso nativo do servidor** (2026-09-18); o plugin externo foi removido do repo (superscrito) e as seções 1-6 permanecem como registro histórico do estudo. Ver a seção 9 para o desenho nativo e o que falta.
 Data: 2026-09-18 · Autoria: estudo conjunto com assistente IA.
 
 ---
@@ -160,16 +160,15 @@ user:   JSON.stringify({ evidence: <state>, criterion: <question>,
 
 ## 5. Configuração
 
-`.opencode/opencode.jsonc` (já configurado no clone):
+`.opencode/opencode.jsonc` (configuração usada durante a fase plugin — **histórica**; o módulo nativo atual usa o bloco `semif` no config global):
 
 ```jsonc
 {
-  "$schema": "https://opencode.ai/config.json",
   "plugin": [
-    ["../plugins/semif", {
+    ["<caminho-do-plugin>", {
       "mode": "auto",            // "auto" | "lazy" | "off"
-      "modelPath": "C:\\Users\\Gabriel\\Desktop\\semif-workspace\\models\\LFM2-350M-Q4_K_M.gguf",
-      "serverPath": "C:\\Users\\Gabriel\\Desktop\\semif-workspace\\bin\\b11040\\llama-server.exe",
+      "modelPath": "<modelos>/LFM2-350M-Q4_K_M.gguf",
+      "serverPath": "<llama.cpp>/llama-server.exe",
       "port": 8817,
       "threads": 4
     }]
@@ -196,22 +195,10 @@ Opções completas (merge: defaults < env < arquivo):
 
 ## 6. Como rodar / testar
 
-```powershell
-# suíte completa (12 testes; testa hermeticamente na porta 8819 — não mexe no 8817)
-cd C:\Users\Gabriel\Desktop\nextcode\plugins\semif
-& "C:\Users\Gabriel\.bun\bin\bun.exe" run test.ts
-
-# smoke de integração (import do entry como o engine faz)
-& "C:\Users\Gabriel\.bun\bin\bun.exe" run smoke.ts
-
-# servidor manual (o mesmo que o plugin spawn)
-C:\Users\Gabriel\Desktop\semif-workspace\bin\b11040\llama-server.exe `
-  -m C:\Users\Gabriel\Desktop\semif-workspace\models\LFM2-350M-Q4_K_M.gguf `
-  --host 127.0.0.1 --port 8817 --threads 4 -c 2048 --no-webui
-```
-
-Arquivos: `plugins/semif/{index,engine,scoring,config,test,smoke}.ts` — sem dependências
-novas além de `@opencode-ai/plugin` (workspace) e `node:` builtins.
+Os comandos desta seção referem-se ao **plugin removido** e permanecem apenas como
+registro histórico. Para o módulo nativo: os testes vivem em `packages/opencode/test/semif/`
+(rodar `bun test test/semif` a partir de `packages/opencode`) e o servidor de referência
+é o `llama-server` vendorizado pelo app (ver seção 9).
 
 ---
 
