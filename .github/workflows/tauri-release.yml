@@ -511,12 +511,14 @@ jobs:
         run: |
           set -euo pipefail
           if [ "$GITHUB_REF_TYPE" = "tag" ]; then
-            echo "TAG=$GITHUB_REF_NAME" >> "$GITHUB_ENV"
-            case "$TAG" in *beta*) echo "CHANNEL=beta" >> "$GITHUB_ENV";; *) echo "CHANNEL=prod" >> "$GITHUB_ENV";; esac
+            TAG="$GITHUB_REF_NAME"
+            case "$TAG" in *beta*) CHANNEL="beta";; *) CHANNEL="prod";; esac
           else
-            echo "TAG=v${INPUT_VERSION:-0.0.0}" >> "$GITHUB_ENV"
-            case "$INPUT_VERSION" in *beta*) echo "CHANNEL=beta" >> "$GITHUB_ENV";; *) echo "CHANNEL=prod" >> "$GITHUB_ENV";; esac
+            TAG="v${INPUT_VERSION:-0.0.0}"
+            case "$INPUT_VERSION" in *beta*) CHANNEL="beta";; *) CHANNEL="prod";; esac
           fi
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
+          echo "CHANNEL=$CHANNEL" >> "$GITHUB_ENV"
 
       # Group commit subjects between the previous release tag and $TAG by
       # conventional-commit type. Never fatal: an empty release-notes.md means
