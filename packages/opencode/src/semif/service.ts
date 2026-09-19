@@ -102,6 +102,7 @@ interface State {
   readonly status: SemifStatus
   readonly error?: string
   readonly handle?: SemifSidecar.Handle
+  readonly modelId?: string
 }
 
 const layer = Layer.effect(
@@ -170,7 +171,8 @@ const layer = Layer.effect(
       if (!current.handle) return
       const stale =
         loaded.resolved.mode === "off" ||
-        (loaded.modelPath !== undefined && current.handle.modelPath !== loaded.modelPath)
+        (loaded.modelPath !== undefined && current.handle.modelPath !== loaded.modelPath) ||
+        loaded.entry?.id !== current.modelId
       if (!stale) return
       yield* SemifSidecar.dispose(current.handle)
       SemifScoring.clearCaches()
@@ -289,7 +291,7 @@ const layer = Layer.effect(
         try: () => SemifScoring.prepare({ url: handle.url }, loaded.entry?.family ?? "lfm2"),
         catch: (cause) => new SemifServiceError({ reason: errorMessage(cause) }),
       })
-      yield* Ref.set(state, { status: "ready" as SemifStatus, handle })
+      yield* Ref.set(state, { status: "ready" as SemifStatus, handle, modelId: loaded.entry?.id })
       return handle
     })
 
@@ -331,8 +333,8 @@ const layer = Layer.effect(
         ),
       decide: (request) =>
         Effect.gen(function* () {
-          const loaded = yield* load
           const handle = yield* ensureHandle
+          const loaded = yield* load
           const entry = loaded.entry
           if (!entry) {
             return yield* new SemifServiceError({ reason: "semif: no supported model is configured" })
