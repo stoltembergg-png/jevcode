@@ -153,6 +153,9 @@ const downloadAttempt = Effect.fnUntraced(function* (input: DownloadInput) {
   let received = start
   input.onProgress?.({ received, total })
 
+  // The sink opens the part file directly; a fresh machine has neither the cache
+  // dir nor the downloads subdir, so materialize them before opening.
+  yield* wrap(fs.makeDirectory(path.dirname(input.part), { recursive: true }))
   const sink = fs.sink(input.part, { flag: resumed ? "a" : "w" })
   yield* response.stream.pipe(
     Stream.tap((chunk) =>

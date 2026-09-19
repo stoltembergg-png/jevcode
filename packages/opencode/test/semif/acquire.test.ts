@@ -104,6 +104,32 @@ describe("semif acquire", () => {
     }
   })
 
+  test("creates missing parent directories for the part file on a fresh machine", async () => {
+    const dir = await tmpdir()
+    const server = modelServer()
+    const dest = path.join(dir, "downloads", "LFM2-350M-Q4_K_M.gguf")
+    const part = path.join(dir, "downloads", "nested", "LFM2-350M-Q4_K_M.gguf.part")
+    try {
+      const result = await Effect.runPromise(
+        Effect.provide(
+          download({
+            dest,
+            part,
+            sha256: hash,
+            expectedBytes: content.byteLength,
+            resolveUrl: () => Effect.succeed(server.urls()),
+          }),
+          layer,
+        ),
+      )
+      expect(result.resumed).toBe(false)
+      expect(await Bun.file(dest).exists()).toBe(true)
+    } finally {
+      server.stop()
+      await fs.rm(dir, { recursive: true, force: true })
+    }
+  })
+
   test("resumes from a partial file with a Range request", async () => {
     const dir = await tmpdir()
     const server = modelServer()
