@@ -145,7 +145,8 @@ describe("bootstrapDirectory", () => {
     expect(mcpReads.sort()).toEqual(["command", "resource", "status"])
   })
 
-  test("skips legacy config while refreshing a v2 directory", async () => {
+  test("loads the directory config for a v2 directory", async () => {
+    const configReads: string[] = []
     const [store, setStore] = directoryState()
 
     await bootstrapDirectory({
@@ -153,7 +154,7 @@ describe("bootstrapDirectory", () => {
       scope: ServerScope.local,
       mcp: false,
       global: {
-        config: {} satisfies Config,
+        config: { shell: "zsh" } satisfies Config,
         path: { state: "", config: "", worktree: "/project", directory: "/project", home: "/home" },
         project: [{ id: "project", worktree: "/project" } as Project],
         provider,
@@ -161,7 +162,8 @@ describe("bootstrapDirectory", () => {
       sdk: {
         config: {
           get: async () => {
-            throw new Error("legacy directory config should not be called")
+            configReads.push("directory")
+            return { data: { shell: "fish", share: "disabled" } satisfies Config }
           },
         },
       } as unknown as OpencodeClient,
@@ -180,29 +182,14 @@ describe("bootstrapDirectory", () => {
     await new Promise((resolve) => setTimeout(resolve, 80))
 
     expect(store.status).toBe("complete")
+    expect(configReads).toEqual(["directory"])
+    // The per-directory server response replaces the global-only seed.
+    expect(store.config).toEqual({ shell: "fish", share: "disabled" })
   })
 })
 
 describe("config queries", () => {
-  test("skips legacy global config for v2 servers", async () => {
-    const sdk = {
-      global: {
-        config: {
-          get: async () => {
-            throw new Error("legacy global config should not be called")
-          },
-        },
-      },
-    } as unknown as OpencodeClient
-
-    const result = await new QueryClient().fetchQuery(
-      loadGlobalConfigQuery(ServerScope.local, sdk, Promise.resolve("v2")),
-    )
-
-    expect(result).toEqual({})
-  })
-
-  test("loads legacy global config for v1 servers", async () => {
+  test("loads global config", async () => {
     const calls: string[] = []
     const config = { shell: "zsh" } satisfies Config
     const sdk = {
@@ -216,9 +203,7 @@ describe("config queries", () => {
       },
     } as unknown as OpencodeClient
 
-    const result = await new QueryClient().fetchQuery(
-      loadGlobalConfigQuery(ServerScope.local, sdk, Promise.resolve("v1")),
-    )
+    const result = await new QueryClient().fetchQuery(loadGlobalConfigQuery(ServerScope.local, sdk))
 
     expect(result).toEqual(config)
     expect(calls).toEqual(["global"])

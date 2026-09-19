@@ -7,7 +7,6 @@ import * as Project from "./project"
 import * as Vcs from "./vcs"
 import { InstanceState } from "@/effect/instance-state"
 import { ShareNext } from "@/share/share-next"
-import { Semif } from "@/semif/service"
 import { Effect, Layer } from "effect"
 import { Config } from "@/config/config"
 import { Service } from "./bootstrap-service"
@@ -29,7 +28,6 @@ const layer = Layer.effect(
     const shareNext = yield* ShareNext.Service
     const snapshot = yield* Snapshot.Service
     const vcs = yield* Vcs.Service
-    const semif = yield* Semif.Service
 
     const run = Effect.gen(function* () {
       const ctx = yield* InstanceState.context
@@ -41,7 +39,7 @@ const layer = Layer.effect(
       // Each service self-manages its own slow work via Effect.forkScoped against
       // its per-instance state scope. We just await materialization here.
       yield* Effect.forEach(
-        [lsp, shareNext, format, vcs, snapshot, project, semif],
+        [lsp, shareNext, format, vcs, snapshot, project],
         (s) => s.init().pipe(Effect.catchCause((cause) => Effect.logWarning("init failed", { cause }))),
         { concurrency: "unbounded", discard: true },
       ).pipe(Effect.withSpan("InstanceBootstrap.init"))
@@ -54,17 +52,7 @@ const layer = Layer.effect(
 export const node = makeGlobalNode({
   service: Service,
   layer: layer,
-  deps: [
-    Config.node,
-    Format.node,
-    LSP.node,
-    Plugin.node,
-    Project.node,
-    ShareNext.node,
-    Snapshot.node,
-    Vcs.node,
-    Semif.node,
-  ],
+  deps: [Config.node, Format.node, LSP.node, Plugin.node, Project.node, ShareNext.node, Snapshot.node, Vcs.node],
 })
 
 export * as InstanceBootstrap from "./bootstrap"

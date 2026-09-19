@@ -344,6 +344,104 @@ jobs:
           fi
           bun run tauri build --config src-tauri/tauri.ci.conf.json --bundles "${{ matrix.bundles }}"
 
+      # Packaging smoke test for the vendored SemIf runtime. The .app produced by
+      # the `app` bundle target must carry the launcher at Contents/MacOS/llama-server
+      # and its dylibs at Contents/Resources/semif (see main.rs `semif_sidecar_env`),
+      # and the launcher must actually start under the loader. This is the only place
+      # that validates the packaged contract before promoting to stable.
+      - name: Smoke-test the packaged macOS bundle (llama-server loader)
+        if: matrix.platform == 'macos-latest'
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The bundle dir is the one the Collect step and swatinem/rust-cache use:
+          # packages/desktop/src-tauri/target/release/bundle. Tauri writes the `app`
+          # target to bundle/macos/<productName>.app (productName = NextCode).
+          BUNDLE="packages/desktop/src-tauri/target/release/bundle/macos"
+          APP=$(find "$BUNDLE" -maxdepth 1 -type d -name "*.app" -print -quit)
+          if [ -z "$APP" ]; then
+            echo "FAIL: no .app bundle under $BUNDLE"
+            ls -la "$BUNDLE" 2>/dev/null || true
+            exit 1
+          fi
+          echo "app bundle: $APP"
+
+          SERVER="$APP/Contents/MacOS/llama-server"
+          LIBS="$APP/Contents/Resources/semif"
+          if [ ! -f "$SERVER" ]; then
+            echo "FAIL: missing $SERVER"
+            ls -la "$APP/Contents/MacOS" 2>/dev/null || true
+            exit 1
+          fi
+          if [ ! -x "$SERVER" ]; then
+            echo "FAIL: $SERVER is not executable"
+            exit 1
+          fi
+          if [ ! -d "$LIBS" ]; then
+            echo "FAIL: missing $LIBS"
+            ls -la "$APP/Contents/Resources" 2>/dev/null || true
+            exit 1
+          fi
+
+          echo "=== Contents/MacOS ==="
+          ls -la "$APP/Contents/MacOS"
+          echo "=== Contents/Resources/semif ==="
+          ls -la "$LIBS"
+          DYLIBS=$(find "$LIBS" -maxdepth 1 -type f -name "*.dylib" | wc -l | tr -d ' ')
+          echo "dylib count: $DYLIBS"
+          if [ "$DYLIBS" -eq 0 ]; then
+            echo "FAIL: no dylibs staged in $LIBS"
+            exit 1
+          fi
+
+          # Run the launcher exactly like the app does at runtime: the same
+          # DYLD_FALLBACK_LIBRARY_PATH the shell hands the sidecar. --help needs no
+          # model and still forces dyld to resolve every linked dylib at startup.
+          echo "=== loader smoke: llama-server --help ==="
+          set +e
+          OUT=$(DYLD_FALLBACK_LIBRARY_PATH="$LIBS" "$SERVER" --help 2>&1)
+          CODE=$?
+          set -e
+          printf '%s\n' "$OUT"
+          echo "exit code: $CODE"
+
+          FAIL=0
+          case "$OUT" in
+            *"Library not loaded"*|*"dyld:"*|*"image not found"*)
+              echo "FAIL: dyld could not start the bundled llama-server"
+              FAIL=1
+              ;;
+          esac
+          # 126/127 mean the loader could not execute it; >=128 is a fatal signal.
+          if [ "$CODE" -eq 126 ] || [ "$CODE" -eq 127 ] || [ "$CODE" -ge 128 ]; then
+            echo "FAIL: llama-server did not run to completion (exit $CODE)"
+            FAIL=1
+          fi
+          if [ "$CODE" -eq 0 ] && ! printf '%s' "$OUT" | grep -qi "usage"; then
+            echo "WARN: --help exited 0 but printed no usage text"
+          fi
+          exit "$FAIL"
+
+      # Best-effort, non-blocking: reports the .app signature state. Real
+      # signing/notarization only happen when the Apple secrets are present, so a
+      # failure here is informational, not a release gate.
+      - name: Report the macOS bundle signature state
+        if: always() && matrix.platform == 'macos-latest'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -uo pipefail
+          BUNDLE="packages/desktop/src-tauri/target/release/bundle/macos"
+          APP=$(find "$BUNDLE" -maxdepth 1 -type d -name "*.app" -print -quit 2>/dev/null)
+          if [ -z "$APP" ]; then
+            echo "no .app bundle found under $BUNDLE; skipping codesign report"
+            exit 0
+          fi
+          echo "codesign verify: $APP"
+          codesign --verify --deep --strict --verbose=2 "$APP" \
+            || echo "WARN: codesign --verify reported issues (unsigned/notarization is out of scope for this pipeline)"
+          codesign -dv --verbose=4 "$APP" 2>&1 || true
+
       - name: Collect artifacts and the updater fragment
         shell: bash
         run: |

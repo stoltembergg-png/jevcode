@@ -60,6 +60,9 @@ const tauriApi = {
   updater: (() => {
     let state: UpdaterState = { status: "idle" }
     let pending: Promise<UpdaterState> | undefined
+    // Reuse the handle across check/install: a fresh handle would download the
+    // (very large) installer a second time in `install()`.
+    let handle: Awaited<ReturnType<typeof checkForUpdate>> | undefined
     const listeners = new Set<(state: UpdaterState) => void>()
     const transition = (next: UpdaterState) => {
       state = next
@@ -71,11 +74,29 @@ const tauriApi = {
       if (pending) return pending
       pending = (async () => {
         transition({ status: "checking" })
-        const update = await checkForUpdate()
-        if (!update) return transition({ status: "up-to-date" })
-        transition({ status: "downloading", version: update.version })
-        await update.download()
-        return transition({ status: "ready", version: update.version })
+        handle = await checkForUpdate()
+        if (!handle) return transition({ status: "up-to-date" })
+        const version = handle.version
+        const downloading = { status: "downloading", version } as UpdaterState
+        transition(downloading)
+        let total: number | undefined
+        let received = 0
+        await handle.download((event) => {
+          if (event.event === "Started") {
+            total = event.data.contentLength
+            received = 0
+          } else if (event.event === "Progress") {
+            received += event.data.chunkLength
+          } else {
+            received = total ?? received
+          }
+          transition({
+            status: "downloading",
+            version,
+            percent: total && total > 0 ? Math.min(100, Math.round((received / total) * 100)) : undefined,
+          })
+        })
+        return transition({ status: "ready", version })
       })()
         .catch((error) => transition({ status: "error", message: error instanceof Error ? error.message : String(error) }))
         .finally(() => {
@@ -95,12 +116,12 @@ const tauriApi = {
         const version = state.version
         transition({ status: "installing", version })
         await invoke("kill_sidecar").catch(() => undefined)
-        const update = await checkForUpdate()
-        if (!update) {
+        const target = handle ?? (await checkForUpdate())
+        if (!target) {
           transition({ status: "ready", version })
           return
         }
-        await update.install()
+        await target.install()
         await relaunchApp()
       },
     }

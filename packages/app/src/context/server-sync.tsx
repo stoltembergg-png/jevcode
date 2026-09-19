@@ -4,6 +4,7 @@ import type {
   Path,
   Project,
   ProviderAuthResponse,
+  SemifStatus,
   SessionStatus,
 } from "@opencode-ai/sdk/v2/client"
 import { showToast } from "@/utils/toast"
@@ -150,6 +151,22 @@ export const loadLspQuery = (scope: ServerScope, directory: string, sdk: Opencod
     queryFn: () => sdk.lsp.status().then((r) => r.data ?? []),
   })
 
+// The local SemIf model is one per machine, so the status is server-global and
+// keyed by scope only. Poll while the service is mid-flight; idle states rely on
+// the mount refetch.
+const isSemifActive = (status: SemifStatus["status"] | undefined) =>
+  status === "downloading" || status === "verifying" || status === "starting"
+
+export const loadSemifStatusQuery = (scope: ServerScope, sdk: OpencodeClient) =>
+  queryOptions({
+    queryKey: [scope, "semif"] as const,
+    queryFn: () =>
+      // Legacy v1 servers do not serve /semif/*; surface that as "no data" so the
+      // popover falls back instead of leaving the query in an error state.
+      sdk.semif.status().then((r) => r.data).catch(() => undefined),
+    refetchInterval: (query) => (isSemifActive(query.state.data?.status) ? 1500 : false),
+  })
+
 export const loadActiveSessionsQuery = (
   scope: ServerScope,
   api: SessionActiveApi,
@@ -184,7 +201,7 @@ function makeQueryOptionsApi(
   protocol: Promise<"v1" | "v2">,
 ) {
   return {
-    globalConfig: () => loadGlobalConfigQuery(scope, serverSDK(), protocol),
+    globalConfig: () => loadGlobalConfigQuery(scope, serverSDK()),
     projects: () => loadProjectsQuery(scope, serverAPI.project),
     providers: (directory: PathKey | null) =>
       loadProvidersQuery(scope, directory, serverAPI, directory ? sdkFor(directory) : serverSDK(), protocol),
@@ -197,6 +214,7 @@ function makeQueryOptionsApi(
     mcpResources: (directory: PathKey) =>
       loadMcpResourcesQuery(scope, directory, serverAPI.mcp, sdkFor(directory), protocol),
     lsp: (directory: PathKey) => loadLspQuery(scope, directory, sdkFor(directory)),
+    semif: () => loadSemifStatusQuery(scope, serverSDK()),
     sessions: (directory: PathKey) => ({ queryKey: [scope, directory, "loadSessions"] as const }),
   }
 }

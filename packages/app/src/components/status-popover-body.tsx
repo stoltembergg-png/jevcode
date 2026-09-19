@@ -5,8 +5,21 @@ import { Switch } from "@opencode-ai/ui/switch"
 import { Tabs } from "@opencode-ai/ui/tabs"
 import { showToast } from "@/utils/toast"
 import { useNavigate } from "@solidjs/router"
-import { type Accessor, createEffect, createMemo, createSignal, For, type JSXElement, onCleanup, Show } from "solid-js"
+import {
+  type Accessor,
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  type JSXElement,
+  Match,
+  onCleanup,
+  Show,
+  Switch as SwitchView,
+} from "solid-js"
 import { createStore } from "solid-js/store"
+import { useQuery, useQueryClient } from "@tanstack/solid-query"
+import type { SemifStatus } from "@opencode-ai/sdk/v2/client"
 import { ServerHealthIndicator, ServerRow } from "@/components/server/server-row"
 import { useLanguage } from "@/context/language"
 import { usePlatform } from "@/context/platform"
@@ -17,6 +30,7 @@ import { type ServerHealth } from "@/utils/server-health"
 import { useGlobal } from "@/context/global"
 import { useSettings } from "@/context/settings"
 import { useMcpToggle } from "@/context/mcp"
+import { useQueryOptions } from "@/context/server-sync"
 import { useServerProtocol } from "@/context/server-sdk"
 
 const pluginEmptyMessage = (value: string, file: string): JSXElement => {
@@ -35,11 +49,27 @@ type SemifMode = "auto" | "lazy" | "off"
 
 const SEMIF_MODES: SemifMode[] = ["auto", "lazy", "off"]
 
-const isSemifMode = (value: unknown): value is SemifMode =>
-  value === "auto" || value === "lazy" || value === "off"
+const semifPercent = (status: SemifStatus | undefined) => {
+  const total = toFinite(status?.progress?.total)
+  const received = toFinite(status?.progress?.received) ?? 0
+  if (total === undefined || total <= 0) return undefined
+  return Math.max(0, Math.min(100, Math.floor((received / total) * 100)))
+}
 
-const isSemifSpec = (item: string | [string, Record<string, unknown>]) =>
-  (typeof item === "string" ? item : item[0]).includes("semif")
+const toFinite = (value: number | string | undefined) => {
+  const next = typeof value === "number" ? value : Number(value)
+  return Number.isFinite(next) ? next : undefined
+}
+
+const semifDotClass = (status: SemifStatus | undefined) => {
+  if (!status) return "bg-border-weaker-base"
+  if (status.status === "ready") return "bg-icon-success-base"
+  if (status.status === "downloading" || status.status === "verifying" || status.status === "starting")
+    return "bg-icon-warning-base"
+  if (status.status === "disabled" || status.status === "failed" || status.status === "not_downloaded")
+    return "bg-border-weak-base"
+  return "bg-border-weaker-base"
+}
 
 const listServersByHealth = (
   list: ServerConnection.Any[],
@@ -309,45 +339,53 @@ export function StatusPopoverBody(props: { shown: Accessor<boolean> }) {
   const pluginEmpty = createMemo(() => pluginEmptyMessage(language.t("dialog.plugins.empty"), "opencode.json"))
 
   const sdk = useSDK()
+  const queryOptions = useQueryOptions()
+  const queryClient = useQueryClient()
   const [semifPending, setSemifPending] = createSignal(false)
-  const semifIndex = createMemo(() => (sync().data.config.plugin ?? []).findIndex(isSemifSpec))
-  const semifConfigured = createMemo(() => semifIndex() !== -1)
-  const semifEntry = createMemo(() => {
-    const index = semifIndex()
-    return index === -1 ? undefined : sync().data.config.plugin?.[index]
-  })
-  const semifStoredMode = createMemo<SemifMode>(() => {
-    const entry = semifEntry()
-    if (!entry || typeof entry === "string") return "auto"
-    const mode = entry[1]?.mode
-    return isSemifMode(mode) ? mode : "auto"
-  })
+  const [semifActionPending, setSemifActionPending] = createSignal(false)
   const [semifOptimistic, setSemifOptimistic] = createSignal<SemifMode | undefined>(undefined)
-  const semifMode = createMemo<SemifMode>(() => semifOptimistic() ?? semifStoredMode())
+  const semifQuery = useQuery(() => ({
+    ...queryOptions().semif(),
+  }))
+  const semifStatus = () => semifQuery.data
+  const semifAvailable = () => semifStatus() !== undefined
+  const semifMode = createMemo<SemifMode>(() => semifOptimistic() ?? semifStatus()?.mode ?? "auto")
+  const semifProgressPercent = createMemo(() => semifPercent(semifStatus()))
+  const showSemifModeControl = () => semifStatus()?.status !== "unsupported"
   createEffect(() => {
     const optimistic = semifOptimistic()
-    if (optimistic && semifStoredMode() === optimistic) setSemifOptimistic(undefined)
+    if (optimistic && semifStatus()?.mode === optimistic) setSemifOptimistic(undefined)
+  })
+  createEffect(() => {
+    if (!semifActionPending()) return
+    const timer = setInterval(() => void semifQuery.refetch(), 1500)
+    onCleanup(() => clearInterval(timer))
   })
   const setSemifMode = async (mode: SemifMode) => {
     if (semifPending() || mode === semifMode()) return
-    const index = semifIndex()
-    if (index === -1) return
-    const plugin = sync().data.config.plugin ?? []
-    const entry = plugin[index]
-    const spec = typeof entry === "string" ? entry : entry[0]
-    const options = typeof entry === "string" ? {} : entry[1]
-    const next = plugin.map((item, i) =>
-      i === index ? ([spec, { ...options, mode }] as [string, Record<string, unknown>]) : item,
-    )
     setSemifOptimistic(mode)
     setSemifPending(true)
     try {
-      await sdk().client.config.update({ config: { plugin: next } })
+      await sdk().client.global.config.update({ config: { semif: { mode } } })
+      await semifQuery.refetch()
     } catch (err) {
       setSemifOptimistic(undefined)
       fail(err)
     } finally {
       setSemifPending(false)
+    }
+  }
+  const runSemifAction = async (action: "acquire" | "start") => {
+    if (semifActionPending()) return
+    setSemifActionPending(true)
+    try {
+      const client = sdk().client
+      const result = action === "acquire" ? await client.semif.acquire() : await client.semif.start()
+      if (result.data) queryClient.setQueryData(queryOptions().semif().queryKey, result.data)
+    } catch (err) {
+      fail(err)
+    } finally {
+      setSemifActionPending(false)
     }
   }
 
@@ -378,14 +416,7 @@ export function StatusPopoverBody(props: { shown: Accessor<boolean> }) {
           </Tabs.Trigger>
           <Tabs.Trigger value="semif" data-slot="tab" class="text-12-regular">
             <span class="flex items-center gap-1.5">
-              <span
-                classList={{
-                  "size-1.5 rounded-full shrink-0": true,
-                  "bg-icon-success-base": semifConfigured() && semifMode() !== "off",
-                  "bg-border-weak-base": semifConfigured() && semifMode() === "off",
-                  "bg-border-weaker-base": !semifConfigured(),
-                }}
-              />
+              <span class={`size-1.5 rounded-full shrink-0 ${semifDotClass(semifAvailable() ? semifStatus() : undefined)}`} />
               {language.t("status.popover.tab.semif")}
             </span>
           </Tabs.Trigger>
@@ -558,7 +589,7 @@ export function StatusPopoverBody(props: { shown: Accessor<boolean> }) {
           <div class="flex flex-col px-2 pb-2">
             <div class="flex flex-col p-3 bg-background-base rounded-sm min-h-14">
               <Show
-                when={semifConfigured()}
+                when={semifAvailable()}
                 fallback={
                   <div class="text-12-regular text-text-weak my-auto">{language.t("semif.not_configured")}</div>
                 }
@@ -570,35 +601,132 @@ export function StatusPopoverBody(props: { shown: Accessor<boolean> }) {
                       {language.t(`semif.description.${semifMode()}`)}
                     </span>
                   </div>
-                  <div
-                    data-action="semif-mode"
-                    role="group"
-                    aria-label={language.t("status.popover.tab.semif")}
-                    class="flex items-center gap-0.5 p-0.5 rounded-md bg-surface-inset-base"
-                  >
-                    <For each={SEMIF_MODES}>
-                      {(mode) => {
-                        const selected = () => semifMode() === mode
-                        return (
-                          <button
-                            type="button"
-                            aria-pressed={selected()}
-                            disabled={semifPending()}
-                            class="inline-flex flex-1 min-w-0 items-center justify-center h-6 px-2 rounded-sm text-12-regular transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-border-focus disabled:cursor-not-allowed disabled:opacity-50"
-                            classList={{
-                              "bg-button-secondary-base text-text-strong shadow-[var(--shadow-xs-border-base)]":
-                                selected(),
-                              "text-text-weak hover:text-text-base hover:bg-surface-inset-base-hover":
-                                !selected() && !semifPending(),
-                            }}
-                            onClick={() => void setSemifMode(mode)}
+
+                  <SwitchView>
+                    <Match when={semifStatus()?.status === "ready"}>
+                      <div class="flex items-center gap-1.5 text-12-regular text-text-base">
+                        <div class="size-1.5 rounded-full shrink-0 bg-icon-success-base" />
+                        {language.t("semif.state.ready")}
+                      </div>
+                    </Match>
+                    <Match when={semifStatus()?.status === "downloading"}>
+                      <div class="flex flex-col gap-1.5">
+                        <div class="flex items-center justify-between gap-2 text-12-regular text-text-weak">
+                          <span>{language.t("semif.state.downloading")}</span>
+                          <Show when={semifProgressPercent() !== undefined}>
+                            <span class="tabular-nums">
+                              {language.t("semif.progress.percent", { percent: `${semifProgressPercent()}%` })}
+                            </span>
+                          </Show>
+                        </div>
+                        <div
+                          role="progressbar"
+                          aria-valuemin={0}
+                          aria-valuemax={100}
+                          aria-valuenow={semifProgressPercent()}
+                          class="h-1.5 w-full overflow-hidden rounded-full bg-surface-inset-base"
+                        >
+                          <div
+                            class="h-full rounded-full bg-icon-base transition-[width] duration-300"
+                            classList={{ "w-full animate-pulse opacity-60": semifProgressPercent() === undefined }}
+                            style={
+                              semifProgressPercent() === undefined ? undefined : { width: `${semifProgressPercent()}%` }
+                            }
+                          />
+                        </div>
+                      </div>
+                    </Match>
+                    <Match when={semifStatus()?.status === "verifying"}>
+                      <div class="flex items-center gap-1.5 text-12-regular text-text-weak">
+                        <div class="size-1.5 rounded-full shrink-0 bg-icon-warning-base" />
+                        {language.t("semif.state.verifying")}
+                      </div>
+                    </Match>
+                    <Match when={semifStatus()?.status === "starting"}>
+                      <div class="flex items-center gap-1.5 text-12-regular text-text-weak">
+                        <div class="size-1.5 rounded-full shrink-0 bg-icon-warning-base" />
+                        {language.t("semif.state.starting")}
+                      </div>
+                    </Match>
+                    <Match when={semifStatus()?.status === "not_downloaded"}>
+                      <div class="flex flex-col gap-2">
+                        <span class="text-12-regular text-text-weak">{language.t("semif.state.not_downloaded")}</span>
+                        <Show when={semifStatus()?.download !== "never"}>
+                          <Button
+                            variant="secondary"
+                            class="self-start h-7 px-3 text-12-regular"
+                            disabled={semifActionPending()}
+                            onClick={() => void runSemifAction("acquire")}
                           >
-                            <span class="min-w-0 truncate">{language.t(`semif.mode.${mode}`)}</span>
-                          </button>
-                        )
-                      }}
-                    </For>
-                  </div>
+                            {language.t("semif.action.start")}
+                          </Button>
+                        </Show>
+                      </div>
+                    </Match>
+                    <Match when={semifStatus()?.status === "failed"}>
+                      <div class="flex flex-col gap-2">
+                        <span class="text-12-regular text-text-weak">{language.t("semif.state.failed")}</span>
+                        <Show when={semifStatus()?.error}>
+                          {(error) => <span class="text-11-regular text-text-weaker break-words">{error()}</span>}
+                        </Show>
+                        <Button
+                          variant="secondary"
+                          class="self-start h-7 px-3 text-12-regular"
+                          disabled={semifActionPending()}
+                          onClick={() => void runSemifAction("start")}
+                        >
+                          {language.t("semif.action.retry")}
+                        </Button>
+                      </div>
+                    </Match>
+                    <Match when={semifStatus()?.status === "offline"}>
+                      <div class="flex items-center gap-1.5 text-12-regular text-text-weak">
+                        <div class="size-1.5 rounded-full shrink-0 bg-border-weaker-base" />
+                        {language.t("semif.state.offline")}
+                      </div>
+                    </Match>
+                    <Match when={semifStatus()?.status === "unsupported"}>
+                      <div class="flex items-center gap-1.5 text-12-regular text-text-weak">
+                        <div class="size-1.5 rounded-full shrink-0 bg-border-weaker-base" />
+                        {language.t("semif.state.unsupported")}
+                      </div>
+                    </Match>
+                    <Match when={semifStatus()?.status === "disabled"}>
+                      <span class="text-12-regular text-text-weak">{language.t("semif.state.disabled")}</span>
+                    </Match>
+                  </SwitchView>
+
+                  <Show when={showSemifModeControl()}>
+                    <div
+                      data-action="semif-mode"
+                      role="group"
+                      aria-label={language.t("status.popover.tab.semif")}
+                      class="flex items-center gap-0.5 p-0.5 rounded-md bg-surface-inset-base"
+                    >
+                      <For each={SEMIF_MODES}>
+                        {(mode) => {
+                          const selected = () => semifMode() === mode
+                          return (
+                            <button
+                              type="button"
+                              aria-pressed={selected()}
+                              disabled={semifPending()}
+                              class="inline-flex flex-1 min-w-0 items-center justify-center h-6 px-2 rounded-sm text-12-regular transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-border-focus disabled:cursor-not-allowed disabled:opacity-50"
+                              classList={{
+                                "bg-button-secondary-base text-text-strong shadow-[var(--shadow-xs-border-base)]":
+                                  selected(),
+                                "text-text-weak hover:text-text-base hover:bg-surface-inset-base-hover":
+                                  !selected() && !semifPending(),
+                              }}
+                              onClick={() => void setSemifMode(mode)}
+                            >
+                              <span class="min-w-0 truncate">{language.t(`semif.mode.${mode}`)}</span>
+                            </button>
+                          )
+                        }}
+                      </For>
+                    </div>
+                  </Show>
                 </div>
               </Show>
             </div>

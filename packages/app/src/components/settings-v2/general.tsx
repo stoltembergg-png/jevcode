@@ -506,6 +506,7 @@ export const SettingsGeneralV2: Component<{
         >
           <ButtonV2 size="normal" variant="neutral" disabled={!updater.action().run} onClick={() => updater.run()}>
             {language.t(updater.action().label)}
+            {updater.action().percent !== undefined ? ` ${updater.action().percent}%` : ""}
           </ButtonV2>
         </SettingsRowV2>
       </SettingsListV2>

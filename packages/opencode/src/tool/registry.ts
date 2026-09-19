@@ -16,11 +16,10 @@ import { WebFetchTool } from "./webfetch"
 import { WriteTool } from "./write"
 import { InvalidTool } from "./invalid"
 import { SkillTool } from "./skill"
-import { SemifDecideTool } from "./semif-decide"
-import { SemifStatusTool } from "./semif-status"
-import { Semif } from "@/semif/service"
 import * as Tool from "./tool"
 import { Config } from "@/config/config"
+import { SemifService } from "@/semif/service"
+import { SemifDecideTool, SemifStatusTool } from "./semif"
 import { type ToolContext as PluginToolContext, type ToolDefinition } from "@opencode-ai/plugin"
 import type { JSONSchema7, JSONSchema7Definition } from "@ai-sdk/provider"
 import { Schema } from "effect"
@@ -117,9 +116,9 @@ const layer = Layer.effect(
     const greptool = yield* GrepTool
     const patchtool = yield* ApplyPatchTool
     const skilltool = yield* SkillTool
-    const semifDecide = yield* SemifDecideTool
-    const semifStatus = yield* SemifStatusTool
     const agent = yield* Agent.Service
+    const semifStatus = yield* SemifStatusTool
+    const semifDecide = yield* SemifDecideTool
     const codeMode = flags.experimentalCodeMode ? yield* Effect.promise(() => import("./code-mode")) : undefined
     const codeModeTool = codeMode ? yield* codeMode.CodeModeTool : undefined
 
@@ -208,9 +207,8 @@ const layer = Layer.effect(
           }
         }
 
-        const cfg = yield* config.get()
+        yield* config.get()
         const questionEnabled = ["app", "cli", "desktop"].includes(flags.client) || flags.enableQuestionTool
-        const semifEnabled = cfg.semif !== undefined && cfg.semif.mode !== "off"
 
         const tool = yield* Effect.all({
           invalid: Tool.init(invalid),
@@ -229,8 +227,8 @@ const layer = Layer.effect(
           question: Tool.init(question),
           lsp: Tool.init(lsptool),
           plan: Tool.init(plan),
-          semifDecide: Tool.init(semifDecide),
           semifStatus: Tool.init(semifStatus),
+          semifDecide: Tool.init(semifDecide),
           ...(codeModeTool ? { execute: Tool.init(codeModeTool) } : {}),
         })
 
@@ -251,10 +249,11 @@ const layer = Layer.effect(
             tool.search,
             tool.skill,
             tool.patch,
+            tool.semifStatus,
+            tool.semifDecide,
             ...(tool.execute ? [tool.execute] : []),
             ...(flags.experimentalLspTool ? [tool.lsp] : []),
             ...(flags.experimentalPlanMode && flags.client === "cli" ? [tool.plan] : []),
-            ...(semifEnabled ? [tool.semifDecide, tool.semifStatus] : []),
           ],
           task: tool.task,
           read: tool.read,
@@ -450,6 +449,7 @@ export const node = LayerNode.make({
     Instruction.node,
     FSUtil.node,
     EventV2Bridge.node,
+    SemifService.node,
     httpClient,
     CrossSpawnSpawner.node,
     Format.node,
@@ -458,7 +458,6 @@ export const node = LayerNode.make({
     MCP.node,
     Database.node,
     Ripgrep.node,
-    Semif.node,
   ],
 })
 
