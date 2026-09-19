@@ -1654,6 +1654,28 @@ export type ServerConfig = {
   cors?: Array<string>
 }
 
+export type SemifMode1 = "auto" | "lazy" | "off"
+
+export type SemifMode = SemifMode1
+
+export type SemifDownload1 = "auto" | "manual" | "never"
+
+export type SemifDownload = SemifDownload1
+
+export type SemifConfig = {
+  mode?: SemifMode1
+  download?: SemifDownload1
+  threads?: number
+  contextSize?: number
+  nProbs?: number
+  cacheSize?: number
+  host?: string
+  port?: number
+  model?: string
+  model_path?: string
+  server_path?: string
+}
+
 export type PermissionActionConfig = "ask" | "allow" | "deny"
 
 export type PermissionObjectConfig = {
@@ -1891,6 +1913,7 @@ export type Config = {
   shell?: string
   logLevel?: LogLevel
   server?: ServerConfig
+  semif?: SemifConfig
   command?: {
     [key: string]: {
       template: string
@@ -2030,6 +2053,39 @@ export type Config = {
     mcp_timeout?: number
     policies?: Array<ConfigV2ExperimentalPolicy>
   }
+}
+
+export type SemifStatus = {
+  status:
+    | "unsupported"
+    | "disabled"
+    | "not_downloaded"
+    | "downloading"
+    | "verifying"
+    | "starting"
+    | "ready"
+    | "failed"
+    | "offline"
+  mode: SemifMode1
+  download: SemifDownload1
+  model?: {
+    id: string
+    filename: string
+    sha256: string
+    bytes: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+    quant: string
+  }
+  modelPath?: string
+  serverPath?: string
+  host: string
+  port: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  pid?: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  adopted: boolean
+  progress?: {
+    received: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+    total?: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  }
+  error?: string
 }
 
 export type Model = {
@@ -7389,6 +7445,81 @@ export type GlobalUpgradeResponses = {
 
 export type GlobalUpgradeResponse = GlobalUpgradeResponses[keyof GlobalUpgradeResponses]
 
+export type SemifStatusData = {
+  body?: never
+  path?: never
+  query?: never
+  url: "/semif/status"
+}
+
+export type SemifStatusErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type SemifStatusError = SemifStatusErrors[keyof SemifStatusErrors]
+
+export type SemifStatusResponses = {
+  /**
+   * Global SemIf status
+   */
+  200: SemifStatus
+}
+
+export type SemifStatusResponse = SemifStatusResponses[keyof SemifStatusResponses]
+
+export type SemifStartData = {
+  body?: never
+  path?: never
+  query?: never
+  url: "/semif/start"
+}
+
+export type SemifStartErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type SemifStartError = SemifStartErrors[keyof SemifStartErrors]
+
+export type SemifStartResponses = {
+  /**
+   * Global SemIf status
+   */
+  200: SemifStatus
+}
+
+export type SemifStartResponse = SemifStartResponses[keyof SemifStartResponses]
+
+export type SemifAcquireData = {
+  body?: never
+  path?: never
+  query?: never
+  url: "/semif/acquire"
+}
+
+export type SemifAcquireErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type SemifAcquireError = SemifAcquireErrors[keyof SemifAcquireErrors]
+
+export type SemifAcquireResponses = {
+  /**
+   * Global SemIf status
+   */
+  200: SemifStatus
+}
+
+export type SemifAcquireResponse = SemifAcquireResponses[keyof SemifAcquireResponses]
+
 export type EventSubscribeData = {
   body?: never
   path?: never
@@ -10617,6 +10748,73 @@ export type SyncHistoryListResponses = {
 }
 
 export type SyncHistoryListResponse = SyncHistoryListResponses[keyof SyncHistoryListResponses]
+
+export type SyncStorageStatusData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/sync/storage"
+}
+
+export type SyncStorageStatusErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type SyncStorageStatusError = SyncStorageStatusErrors[keyof SyncStorageStatusErrors]
+
+export type SyncStorageStatusResponses = {
+  /**
+   * Database storage status
+   */
+  200: {
+    fileBytes: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+    tables: Array<{
+      name: string
+      bytes: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+    }>
+  }
+}
+
+export type SyncStorageStatusResponse = SyncStorageStatusResponses[keyof SyncStorageStatusResponses]
+
+export type SyncStorageCompactData = {
+  body?: {
+    vacuum?: boolean
+  }
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/sync/compact"
+}
+
+export type SyncStorageCompactErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type SyncStorageCompactError = SyncStorageCompactErrors[keyof SyncStorageCompactErrors]
+
+export type SyncStorageCompactResponses = {
+  /**
+   * Database compacted
+   */
+  200: {
+    done: boolean
+    fileBytes: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  }
+}
+
+export type SyncStorageCompactResponse = SyncStorageCompactResponses[keyof SyncStorageCompactResponses]
 
 export type TuiAppendPromptData = {
   body?: {

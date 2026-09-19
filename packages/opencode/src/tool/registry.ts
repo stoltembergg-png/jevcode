@@ -18,6 +18,8 @@ import { InvalidTool } from "./invalid"
 import { SkillTool } from "./skill"
 import * as Tool from "./tool"
 import { Config } from "@/config/config"
+import { SemifService } from "@/semif/service"
+import { SemifDecideTool, SemifStatusTool } from "./semif"
 import { type ToolContext as PluginToolContext, type ToolDefinition } from "@opencode-ai/plugin"
 import type { JSONSchema7, JSONSchema7Definition } from "@ai-sdk/provider"
 import { Schema } from "effect"
@@ -115,6 +117,8 @@ const layer = Layer.effect(
     const patchtool = yield* ApplyPatchTool
     const skilltool = yield* SkillTool
     const agent = yield* Agent.Service
+    const semifStatus = yield* SemifStatusTool
+    const semifDecide = yield* SemifDecideTool
     const codeMode = flags.experimentalCodeMode ? yield* Effect.promise(() => import("./code-mode")) : undefined
     const codeModeTool = codeMode ? yield* codeMode.CodeModeTool : undefined
 
@@ -223,6 +227,8 @@ const layer = Layer.effect(
           question: Tool.init(question),
           lsp: Tool.init(lsptool),
           plan: Tool.init(plan),
+          semifStatus: Tool.init(semifStatus),
+          semifDecide: Tool.init(semifDecide),
           ...(codeModeTool ? { execute: Tool.init(codeModeTool) } : {}),
         })
 
@@ -243,6 +249,8 @@ const layer = Layer.effect(
             tool.search,
             tool.skill,
             tool.patch,
+            tool.semifStatus,
+            tool.semifDecide,
             ...(tool.execute ? [tool.execute] : []),
             ...(flags.experimentalLspTool ? [tool.lsp] : []),
             ...(flags.experimentalPlanMode && flags.client === "cli" ? [tool.plan] : []),
@@ -441,6 +449,7 @@ export const node = LayerNode.make({
     Instruction.node,
     FSUtil.node,
     EventV2Bridge.node,
+    SemifService.node,
     httpClient,
     CrossSpawnSpawner.node,
     Format.node,

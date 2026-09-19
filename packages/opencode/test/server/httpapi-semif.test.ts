@@ -1,16 +1,16 @@
 import { NodeHttpServer } from "@effect/platform-node"
 import { describe, expect } from "bun:test"
 import { Context, Effect, Layer, Option } from "effect"
-import { HttpBody, HttpClient, HttpClientRequest, HttpRouter } from "effect/unstable/http"
+import { HttpClient, HttpClientRequest, HttpRouter } from "effect/unstable/http"
 import { HttpApiBuilder } from "effect/unstable/httpapi"
+import { MoveSession } from "@opencode-ai/core/control-plane/move-session"
 import { Auth } from "../../src/auth"
 import { Config } from "../../src/config/config"
 import { Installation } from "../../src/installation"
-import { MoveSession } from "@opencode-ai/core/control-plane/move-session"
+import { SemifService, type Status } from "../../src/semif/service"
 import { ServerAuth } from "../../src/server/auth"
-import { SemifService } from "../../src/semif/service"
 import { RootHttpApi } from "../../src/server/routes/instance/httpapi/api"
-import { GlobalPaths } from "../../src/server/routes/instance/httpapi/groups/global"
+import { SemifPaths } from "../../src/server/routes/instance/httpapi/groups/semif"
 import { controlHandlers } from "../../src/server/routes/instance/httpapi/handlers/control"
 import { controlPlaneHandlers } from "../../src/server/routes/instance/httpapi/handlers/control-plane"
 import { globalHandlers } from "../../src/server/routes/instance/httpapi/handlers/global"
@@ -18,6 +18,28 @@ import { semifHandlers } from "../../src/server/routes/instance/httpapi/handlers
 import { authorizationLayer } from "../../src/server/routes/instance/httpapi/middleware/authorization"
 import { schemaErrorLayer } from "../../src/server/routes/instance/httpapi/middleware/schema-error"
 import { testEffect } from "../lib/effect"
+
+// The SemIf service owns one model per machine, so these routes are mounted on
+// the server-level root API. No instance or workspace context is involved.
+const PENDING: Status = {
+  status: "downloading",
+  mode: "auto",
+  download: "auto",
+  host: "127.0.0.1",
+  port: 8817,
+  adopted: false,
+  progress: { received: 37, total: 100 },
+}
+
+const READY: Status = {
+  status: "ready",
+  mode: "auto",
+  download: "auto",
+  host: "127.0.0.1",
+  port: 8817,
+  adopted: false,
+  pid: 4242,
+}
 
 const apiLayer = HttpRouter.serve(
   HttpApiBuilder.layer(RootHttpApi).pipe(
@@ -33,7 +55,6 @@ const apiLayer = HttpRouter.serve(
   Layer.provide(Layer.mock(Auth.Service)({})),
   Layer.provide(Layer.mock(Config.Service)({})),
   Layer.provide(Layer.mock(MoveSession.Service)({})),
-  Layer.provide(Layer.mock(SemifService.Service)({})),
   Layer.provide(
     Layer.mock(Installation.Service)({
       method: () => Effect.succeed("npm"),
@@ -41,53 +62,50 @@ const apiLayer = HttpRouter.serve(
       upgrade: () => Effect.void,
     }),
   ),
+  Layer.provide(
+    Layer.mock(SemifService.Service)({
+      status: () => Effect.succeed(PENDING),
+      start: () => Effect.succeed(READY),
+      acquire: () => Effect.succeed({ ...PENDING, status: "not_downloaded" as const }),
+    }),
+  ),
   Layer.provide(ServerAuth.Config.configLayer({ password: Option.none(), username: "opencode" })),
 )
 const it = testEffect(apiLayer)
 
-describe("global HttpApi", () => {
-  it.live("upgrades to the requested version", () =>
+describe("semif HttpApi", () => {
+  it.live("GET /semif/status returns the global discriminated status", () =>
     Effect.gen(function* () {
-      const response = yield* HttpClientRequest.post(GlobalPaths.upgrade).pipe(
-        HttpClientRequest.bodyJsonUnsafe({ target: "9.9.9" }),
-        HttpClient.execute,
-      )
+      const response = yield* HttpClientRequest.get(SemifPaths.status).pipe(HttpClient.execute)
 
       expect(response.status).toBe(200)
-      expect(yield* response.json).toEqual({ success: true, version: "9.9.9" })
+      expect(yield* response.json).toMatchObject({
+        status: "downloading",
+        mode: "auto",
+        download: "auto",
+        host: "127.0.0.1",
+        port: 8817,
+        adopted: false,
+        progress: { received: 37, total: 100 },
+      })
     }),
   )
 
-  it.live("rejects invalid upgrade payloads", () =>
+  it.live("POST /semif/start returns the resulting ready status", () =>
     Effect.gen(function* () {
-      const response = yield* HttpClientRequest.post(GlobalPaths.upgrade).pipe(
-        HttpClientRequest.bodyJsonUnsafe({ target: 1 }),
-        HttpClient.execute,
-      )
+      const response = yield* HttpClientRequest.post(SemifPaths.start).pipe(HttpClient.execute)
 
-      expect(response.status).toBe(400)
+      expect(response.status).toBe(200)
+      expect(yield* response.json).toMatchObject({ status: "ready", pid: 4242 })
     }),
   )
 
-  it.live("rejects invalid upgrade target versions", () =>
+  it.live("POST /semif/acquire returns the resulting not-downloaded status", () =>
     Effect.gen(function* () {
-      const response = yield* HttpClientRequest.post(GlobalPaths.upgrade).pipe(
-        HttpClientRequest.bodyJsonUnsafe({ target: "latest" }),
-        HttpClient.execute,
-      )
+      const response = yield* HttpClientRequest.post(SemifPaths.acquire).pipe(HttpClient.execute)
 
-      expect(response.status).toBe(400)
-    }),
-  )
-
-  it.live("rejects unsupported upgrade content types", () =>
-    Effect.gen(function* () {
-      const response = yield* HttpClientRequest.post(GlobalPaths.upgrade).pipe(
-        HttpClientRequest.setBody(HttpBody.text('{"target":"1.0.0"}', "text/plain")),
-        HttpClient.execute,
-      )
-
-      expect(response.status).toBe(415)
+      expect(response.status).toBe(200)
+      expect(yield* response.json).toMatchObject({ status: "not_downloaded" })
     }),
   )
 })
