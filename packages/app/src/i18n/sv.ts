@@ -837,6 +837,7 @@ export const dict = {
   "semif.action.start": "Prepare model",
   "semif.action.retry": "Retry",
   "semif.progress.percent": "{{percent}}",
+  "semif.model.label": "Local model",
   "session.share.popover.title": "Publicera på webben",
   "session.share.popover.description.shared":
     "Denna session är offentlig på webben. Den är tillgänglig för alla med länken.",

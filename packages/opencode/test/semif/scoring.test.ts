@@ -1,10 +1,13 @@
-import { describe, expect, test } from "bun:test"
+import { beforeEach, describe, expect, test } from "bun:test"
 import { createHash } from "node:crypto"
 import {
   LETTERS,
   PROMPT_VERSION,
+  SLOT_LOGIT_BIAS,
   assertBoundary,
+  clearCaches,
   decide,
+  prepare,
   renderPrompt,
   resolveSlotIds,
   softmaxSubset,
@@ -12,6 +15,7 @@ import {
   type SemifHttp,
 } from "../../src/semif/scoring"
 import { parseSemifOptions } from "../../src/semif/config"
+import { profile } from "../../src/semif/manifest"
 
 // Hermetic stand-in for llama.cpp's tokenizer: one token per character, with A..P
 // mapped to the contiguous slot ids the real LFM2 tokenizer produces (A=542..P=557).
@@ -33,17 +37,21 @@ type FakeServerOptions = {
 
 function startServer(options: FakeServerOptions) {
   const tokenize = options.tokenize ?? defaultTokenize
-  return Bun.serve({
+  const completions: unknown[] = []
+  let tokenizeCalls = 0
+  const server = Bun.serve({
     port: 0,
     fetch: async (request) => {
       const url = new URL(request.url)
       if (url.pathname === "/tokenize") {
+        tokenizeCalls += 1
         const body = (await request.json()) as { content?: unknown }
         const content = typeof body.content === "string" ? body.content : ""
         return Response.json({ tokens: tokenize(content) })
       }
       if (url.pathname === "/completion") {
         const body = (await request.json()) as { prompt?: unknown }
+        completions.push(body)
         const prompt = typeof body.prompt === "string" ? body.prompt : ""
         const entries = Object.entries(options.logprobs).map(([id, logprob]) => ({
           id: Number(id),
@@ -65,6 +73,7 @@ function startServer(options: FakeServerOptions) {
       return new Response("not found", { status: 404 })
     },
   })
+  return Object.assign(server, { completions, tokenizeCount: () => tokenizeCalls })
 }
 
 const OPTIONS = [
@@ -72,6 +81,10 @@ const OPTIONS = [
   { id: "billing", description: "Billing support." },
   { id: "technical", description: "Technical troubleshooting." },
 ]
+
+beforeEach(() => {
+  clearCaches()
+})
 
 describe("semif scoring", () => {
   test("resolveSlotIds maps A..P to contiguous slot tokens", async () => {
@@ -103,6 +116,13 @@ describe("semif scoring", () => {
     await expect(assertBoundary(http, prompt, ids)).rejects.toThrow(/boundary check failed for letter B/)
   })
 
+  test("prepare runs the boundary canary once at ready", async () => {
+    using server = startServer({ logprobs: {} })
+    const ids = await prepare({ url: server.url.origin }, "lfm2")
+    expect(ids).toEqual(SLOT_IDS)
+    expect(server.tokenizeCount()).toBe(16 + 1 + 16)
+  })
+
   test("decide softmaxes only over slots present in top_logprobs", async () => {
     using server = startServer({ logprobs: { [slotId("A")]: Math.log(3), [slotId("C")]: Math.log(1) } })
     const cfg = parseSemifOptions({ cacheSize: 0 })
@@ -127,11 +147,35 @@ describe("semif scoring", () => {
     expect(record.missing_slots).toEqual(["billing"])
     expect(record.prompt_sha256).toBe(createHash("sha256").update(prompt).digest("hex"))
     expect(record.prompt_version).toBe(PROMPT_VERSION)
-    expect(record.model).toEqual({ source: "LiquidAI/LFM2-350M", revision: "Q4_K_M", server: "llama.cpp b11040" })
+    expect(record.model).toEqual({ source: "LiquidAI/LFM2-1.2B", revision: "Q4_K_M", server: "llama.cpp b11040" })
     expect(record.input_tokens).toBe(defaultTokenize(prompt).length)
     expect(record.forward_seconds).toBeGreaterThanOrEqual(0)
     expect(record.total_seconds).toBeGreaterThanOrEqual(record.forward_seconds)
     expect(record.cached).toBeUndefined()
+    expect(server.completions).toHaveLength(1)
+    expect(server.completions[0]).toMatchObject({
+      prompt,
+      n_predict: 1,
+      temperature: 0,
+      cache_prompt: false,
+      logit_bias: SLOT_IDS.map((id) => [id, SLOT_LOGIT_BIAS]),
+    })
+  })
+
+  test("decide tokenizes answer slots once and skips the per-decision boundary check", async () => {
+    using server = startServer({ logprobs: { [slotId("A")]: 0, [slotId("B")]: 0 } })
+    const cfg = parseSemifOptions({ cacheSize: 0 })
+    const http: SemifHttp = { url: server.url.origin }
+    const options = [
+      { id: "a", description: "Option A" },
+      { id: "b", description: "Option B" },
+    ]
+    await decide(http, cfg, { state: "first", question: "q", options })
+    const afterFirst = server.tokenizeCount()
+    expect(afterFirst).toBe(16)
+    await decide(http, cfg, { state: "second", question: "q", options })
+    expect(server.tokenizeCount()).toBe(afterFirst)
+    expect(server.completions).toHaveLength(2)
   })
 
   test("decide throws when no declared slot appears in top_logprobs", async () => {
@@ -204,5 +248,48 @@ describe("semif scoring", () => {
     expect(prompt.endsWith("<|im_start|>assistant\n")).toBe(true)
     expect(prompt).not.toContain('"id"')
     expect(prompt).toContain('"letter":"A"')
+  })
+
+  test("renderPrompt uses Qwen ChatML and DeepSeek-R1 prefills an empty think block", () => {
+    const qwen = renderPrompt("evidence", "criterion", OPTIONS, "qwen")
+    expect(qwen.startsWith("<|im_start|>system\n")).toBe(true)
+    expect(qwen.includes("<|startoftext|>")).toBe(false)
+
+    const deepseek = renderPrompt("evidence", "criterion", OPTIONS, "deepseek_r1")
+    expect(deepseek.startsWith("<｜begin▁of▁sentence｜><｜User｜>")).toBe(true)
+    expect(deepseek.endsWith("<｜Assistant｜><think>\n\n</think>")).toBe(true)
+  })
+
+  test("decide uses the selected profile for cache_prompt and model identity", async () => {
+    using server = startServer({ logprobs: { [slotId("A")]: 0, [slotId("B")]: 0 } })
+    const cfg = parseSemifOptions({ cacheSize: 0 })
+    const qwen = profile({
+      id: "Qwen/Qwen2.5-1.5B",
+      filename: "qwen2.5-1.5b-instruct-q4_k_m.gguf",
+      url: "https://example.invalid",
+      bytes: 1,
+      sha256: "aa",
+      quant: "Q4_K_M",
+      label: "Qwen2.5-1.5B",
+      source: "Qwen/Qwen2.5-1.5B",
+      family: "qwen",
+      choice: true,
+    })
+    const record = await decide(
+      { url: server.url.origin },
+      cfg,
+      {
+        state: "qwen-profile",
+        question: "q",
+        options: [
+          { id: "a", description: "Option A" },
+          { id: "b", description: "Option B" },
+        ],
+      },
+      qwen,
+    )
+    expect(record.model).toEqual({ source: "Qwen/Qwen2.5-1.5B", revision: "Q4_K_M", server: "llama.cpp b11040" })
+    expect(server.completions[0]).toMatchObject({ cache_prompt: true })
+    expect((server.completions[0] as { prompt: string }).prompt.startsWith("<|im_start|>system\n")).toBe(true)
   })
 })

@@ -49,6 +49,14 @@ type SemifMode = "auto" | "lazy" | "off"
 
 const SEMIF_MODES: SemifMode[] = ["auto", "lazy", "off"]
 
+const SEMIF_DEFAULT_MODEL = "LiquidAI/LFM2-1.2B-GGUF"
+
+const SEMIF_MODEL_CHOICES = [
+  { id: SEMIF_DEFAULT_MODEL, label: "LFM2-1.2B Q4_K_M" },
+  { id: "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B", label: "DeepSeek-R1-Distill-Qwen-1.5B" },
+  { id: "Qwen/Qwen2.5-1.5B", label: "Qwen2.5-1.5B" },
+] as const
+
 const semifPercent = (status: SemifStatus | undefined) => {
   const total = toFinite(status?.progress?.total)
   const received = toFinite(status?.progress?.received) ?? 0
@@ -344,17 +352,36 @@ export function StatusPopoverBody(props: { shown: Accessor<boolean> }) {
   const [semifPending, setSemifPending] = createSignal(false)
   const [semifActionPending, setSemifActionPending] = createSignal(false)
   const [semifOptimistic, setSemifOptimistic] = createSignal<SemifMode | undefined>(undefined)
+  const [semifModelOptimistic, setSemifModelOptimistic] = createSignal<string | undefined>(undefined)
   const semifQuery = useQuery(() => ({
     ...queryOptions().semif(),
   }))
   const semifStatus = () => semifQuery.data
   const semifAvailable = () => semifStatus() !== undefined
   const semifMode = createMemo<SemifMode>(() => semifOptimistic() ?? semifStatus()?.mode ?? "auto")
+  const semifModelId = createMemo(
+    () => semifModelOptimistic() ?? semifStatus()?.model?.id ?? SEMIF_DEFAULT_MODEL,
+  )
   const semifProgressPercent = createMemo(() => semifPercent(semifStatus()))
   const showSemifModeControl = () => semifStatus()?.status !== "unsupported"
+  const semifChoices = createMemo(() => {
+    const fromStatus = semifStatus()?.choices
+    if (fromStatus && fromStatus.length > 0) return fromStatus
+    return SEMIF_MODEL_CHOICES
+  })
+  const semifBusy = () =>
+    semifPending() ||
+    semifActionPending() ||
+    semifStatus()?.status === "downloading" ||
+    semifStatus()?.status === "verifying" ||
+    semifStatus()?.status === "starting"
   createEffect(() => {
     const optimistic = semifOptimistic()
     if (optimistic && semifStatus()?.mode === optimistic) setSemifOptimistic(undefined)
+  })
+  createEffect(() => {
+    const optimistic = semifModelOptimistic()
+    if (optimistic && semifStatus()?.model?.id === optimistic) setSemifModelOptimistic(undefined)
   })
   createEffect(() => {
     if (!semifActionPending()) return
@@ -370,6 +397,21 @@ export function StatusPopoverBody(props: { shown: Accessor<boolean> }) {
       await semifQuery.refetch()
     } catch (err) {
       setSemifOptimistic(undefined)
+      fail(err)
+    } finally {
+      setSemifPending(false)
+    }
+  }
+  const setSemifModel = async (id: string) => {
+    if (semifBusy() || id === semifModelId()) return
+    setSemifModelOptimistic(id)
+    setSemifPending(true)
+    try {
+      await sdk().client.global.config.update({ config: { semif: { model: id } } })
+      await semifQuery.refetch()
+      if (semifMode() !== "off") await runSemifAction("start")
+    } catch (err) {
+      setSemifModelOptimistic(undefined)
       fail(err)
     } finally {
       setSemifPending(false)
@@ -695,6 +737,44 @@ export function StatusPopoverBody(props: { shown: Accessor<boolean> }) {
                       <span class="text-12-regular text-text-weak">{language.t("semif.state.disabled")}</span>
                     </Match>
                   </SwitchView>
+
+                  <div class="flex flex-col gap-1.5">
+                    <span class="text-12-regular text-text-weak">{language.t("semif.model.label")}</span>
+                    <div
+                      data-action="semif-model"
+                      role="group"
+                      aria-label={language.t("semif.model.label")}
+                      class="flex flex-col gap-0.5 p-0.5 rounded-md bg-surface-inset-base"
+                    >
+                      <For each={semifChoices()}>
+                        {(choice) => {
+                          const selected = () => semifModelId() === choice.id
+                          return (
+                            <button
+                              type="button"
+                              aria-pressed={selected()}
+                              disabled={semifBusy()}
+                              class="inline-flex w-full min-w-0 items-center justify-between gap-2 h-7 px-2 rounded-sm text-12-regular transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-border-focus disabled:cursor-not-allowed disabled:opacity-50"
+                              classList={{
+                                "bg-button-secondary-base text-text-strong shadow-[var(--shadow-xs-border-base)]":
+                                  selected(),
+                                "text-text-weak hover:text-text-base hover:bg-surface-inset-base-hover":
+                                  !selected() && !semifBusy(),
+                              }}
+                              onClick={() => void setSemifModel(choice.id)}
+                            >
+                              <span class="min-w-0 truncate">{choice.label}</span>
+                              <Show when={choice.id === SEMIF_DEFAULT_MODEL}>
+                                <span class="text-11-regular text-text-weak shrink-0">
+                                  {language.t("common.default")}
+                                </span>
+                              </Show>
+                            </button>
+                          )
+                        }}
+                      </For>
+                    </div>
+                  </div>
 
                   <Show when={showSemifModeControl()}>
                     <div

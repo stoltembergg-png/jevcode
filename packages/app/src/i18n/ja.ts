@@ -796,6 +796,7 @@ export const dict = {
   "semif.action.start": "Prepare model",
   "semif.action.retry": "Retry",
   "semif.progress.percent": "{{percent}}",
+  "semif.model.label": "Local model",
   "session.share.popover.title": "ウェブで公開",
   "session.share.popover.description.shared":
     "このセッションはウェブで公開されています。リンクを知っている人なら誰でもアクセスできます。",

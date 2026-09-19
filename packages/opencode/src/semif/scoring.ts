@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto"
 import type { SemifResolved } from "./config"
+import { profile, type ChatFamily, type Profile } from "./manifest"
 
 export const LETTERS = "ABCDEFGHIJKLMNOP"
 
@@ -8,14 +9,13 @@ export const SYSTEM_PROMPT =
 
 export const PROMPT_VERSION = "direct-options-v1"
 
-export const MODEL_INFO = {
-  source: "LiquidAI/LFM2-350M",
-  revision: "Q4_K_M",
-  server: "llama.cpp b11040",
-} as const
+export const SERVER_REVISION = "llama.cpp b11040"
+
+export const SLOT_LOGIT_BIAS = 20
 
 export const PROBABILITY_STATUS = "conditional option score; uncalibrated as decision confidence"
-export const READOUT = "llama.cpp server top-k next-token logprobs at declared answer slots"
+export const READOUT =
+  "llama.cpp server top-k next-token logprobs at declared answer slots with equal slot logit_bias"
 
 export type SemifHttp = {
   url: string
@@ -63,11 +63,16 @@ type CompletionResponse = {
 }
 
 // LFM2 uses a hybrid convolution + attention architecture, so llama.cpp cannot reuse a
-// shared KV cache prefix across decisions. Every decision is one fresh forward pass.
+// shared KV cache prefix across decisions. Qwen-family models may cache the prompt.
 const slotCache = new Map<string, number[]>()
 const decisionCache = new Map<string, SemifDecision>()
 
 const message = (error: unknown): string => (error instanceof Error ? error.message : String(error))
+
+export function clearCaches(): void {
+  slotCache.clear()
+  decisionCache.clear()
+}
 
 function linksignals(signals: AbortSignal[]): AbortSignal {
   const controller = new AbortController()
@@ -159,18 +164,33 @@ export function renderPrompt(
   state: unknown,
   question: string,
   options: Array<{ description: string }>,
+  family: ChatFamily = "lfm2",
 ): string {
   const payload = JSON.stringify({
     evidence: state,
     criterion: question,
     options: options.map((option, index) => ({ letter: LETTERS[index], description: option.description })),
   })
-  return (
-    "<|startoftext|>" +
+  if (family === "deepseek_r1") {
+    return (
+      "<｜begin▁of▁sentence｜><｜User｜>" +
+      `${SYSTEM_PROMPT}\n${payload}` +
+      "<｜Assistant｜><think>\n\n</think>"
+    )
+  }
+  const body =
     `<|im_start|>system\n${SYSTEM_PROMPT}<|im_end|>\n` +
     `<|im_start|>user\n${payload}<|im_end|>\n` +
     "<|im_start|>assistant\n"
-  )
+  if (family === "qwen") return body
+  return "<|startoftext|>" + body
+}
+
+export async function prepare(http: SemifHttp, family: ChatFamily = "lfm2"): Promise<number[]> {
+  const slotIds = await resolveSlotIds(http)
+  const prompt = renderPrompt("canary", "choose", [{ description: "one" }, { description: "two" }], family)
+  await assertBoundary(http, prompt, slotIds)
+  return slotIds
 }
 
 export function softmaxSubset(logits: number[]): number[] {
@@ -239,11 +259,16 @@ function parseCompletion(response: unknown): { byToken: Map<number, number>; tok
   return { byToken, tokensEvaluated }
 }
 
-export async function decide(http: SemifHttp, cfg: SemifResolved, request: SemifDecisionRequest): Promise<SemifDecision> {
+export async function decide(
+  http: SemifHttp,
+  cfg: SemifResolved,
+  request: SemifDecisionRequest,
+  model: Profile = profile(),
+): Promise<SemifDecision> {
   const started = performance.now()
   validate(request)
 
-  const prompt = renderPrompt(request.state, request.question, request.options)
+  const prompt = renderPrompt(request.state, request.question, request.options, model.family)
   const promptSha = createHash("sha256").update(prompt).digest("hex")
   const key = cacheKey(promptSha, request.options)
 
@@ -253,7 +278,6 @@ export async function decide(http: SemifHttp, cfg: SemifResolved, request: Semif
   }
 
   const slotIds = await resolveSlotIds(http)
-  const baseTokens = await assertBoundary(http, prompt, slotIds)
 
   const forwardStarted = performance.now()
   const response = await postJson(
@@ -265,7 +289,8 @@ export async function decide(http: SemifHttp, cfg: SemifResolved, request: Semif
       n_probs: cfg.nProbs,
       temperature: 0,
       return_tokens: true,
-      cache_prompt: false,
+      cache_prompt: model.cachePrompt,
+      logit_bias: slotIds.map((id) => [id, SLOT_LOGIT_BIAS]),
     },
     300000,
   )
@@ -295,10 +320,10 @@ export async function decide(http: SemifHttp, cfg: SemifResolved, request: Semif
     option_logits: optionLogits,
     answer_token_ids: slotIds.slice(0, request.options.length),
     chosen,
-    input_tokens: tokensEvaluated ?? baseTokens.length,
+    input_tokens: tokensEvaluated ?? 0,
     prompt_sha256: promptSha,
     prompt_version: PROMPT_VERSION,
-    model: { ...MODEL_INFO },
+    model: { source: model.source, revision: model.revision, server: SERVER_REVISION },
     probability_status: PROBABILITY_STATUS,
     readout: READOUT,
     forward_seconds: forwardSeconds,

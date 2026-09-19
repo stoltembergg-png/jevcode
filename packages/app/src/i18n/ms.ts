@@ -830,6 +830,7 @@ export const dict = {
   "semif.action.start": "Prepare model",
   "semif.action.retry": "Retry",
   "semif.progress.percent": "{{percent}}",
+  "semif.model.label": "Local model",
   "session.share.popover.title": "Terbit di web",
   "session.share.popover.description.shared":
     "Sesi ini adalah awam di web. Ia boleh diakses oleh sesiapa sahaja yang mempunyai pautan.",

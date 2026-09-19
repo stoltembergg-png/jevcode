@@ -836,6 +836,7 @@ export const dict = {
   "semif.action.start": "Prepare model",
   "semif.action.retry": "Retry",
   "semif.progress.percent": "{{percent}}",
+  "semif.model.label": "Local model",
   "session.share.popover.title": "Zverejniť na webe",
   "session.share.popover.description.shared": "Táto relácia je verejná na webe. Prístupná je komukoľvek s odkazom.",
   "session.share.popover.description.unshared":

@@ -2086,6 +2086,11 @@ export type SemifStatus = {
     total?: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
   }
   error?: string
+  choices: Array<{
+    id: string
+    label: string
+    quant: string
+  }>
 }
 
 export type Model = {

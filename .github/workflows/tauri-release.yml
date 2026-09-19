@@ -44,12 +44,13 @@ concurrency:
 
 jobs:
   sidecar:
-    runs-on: ubuntu-latest
+    # Pin 24.04: ubuntu-latest migrates to 26.04 from 19 Oct 2026.
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@v2.2.0
         with:
           bun-version-file: package.json
 
@@ -62,7 +63,7 @@ jobs:
           OPENCODE_CHANNEL: ${{ inputs.channel || 'prod' }}
         run: bun run build --skip-embed-web-ui --targets=opencode-windows-x64,opencode-darwin-arm64
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: opencode-sidecar
           path: packages/opencode/dist/
@@ -72,16 +73,16 @@ jobs:
   # packages/opencode/script/semif-server.lock.json; the fetch script verifies
   # bytes and sha256 on the way in and is a no-op when the mirror already has it.
   mirror:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
       contents: write
     outputs:
       tag: ${{ steps.plan.outputs.tag }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@v2.2.0
         with:
           bun-version-file: package.json
 
@@ -153,16 +154,17 @@ jobs:
       HAS_AZURE: ${{ secrets.AZURE_TRUSTED_SIGNING_ACCOUNT_NAME != '' }}
       HAS_APPLE: ${{ secrets.APPLE_CERTIFICATE != '' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # Explicit bun setup instead of the composite action: on Windows Bun's
       # patched-dependency cache rename fails with ENOTEMPTY (oven-sh/bun#28147),
       # so Windows installs with --no-cache + hoisted linker.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: "24"
+          package-manager-cache: false
 
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@v2.2.0
         with:
           bun-version-file: package.json
 
@@ -214,7 +216,7 @@ jobs:
           workspaces: packages/desktop/src-tauri
 
       - name: Download the cross-compiled sidecar
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: opencode-sidecar
           path: packages/opencode/dist
@@ -480,7 +482,7 @@ jobs:
 
       - name: Upload artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: tauri-release-${{ matrix.platform }}
           path: dist-release/
@@ -489,14 +491,14 @@ jobs:
   release:
     needs: [sidecar, build]
     if: (inputs.publish || github.ref_type == 'tag') && needs.build.result == 'success'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
       contents: write
     steps:
       # The release job has no checkout of its own; the changelog step needs tags,
       # so fetch the full history instead of the shallow default.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
           fetch-tags: true
@@ -509,12 +511,14 @@ jobs:
         run: |
           set -euo pipefail
           if [ "$GITHUB_REF_TYPE" = "tag" ]; then
-            echo "TAG=$GITHUB_REF_NAME" >> "$GITHUB_ENV"
-            case "$TAG" in *beta*) echo "CHANNEL=beta" >> "$GITHUB_ENV";; *) echo "CHANNEL=prod" >> "$GITHUB_ENV";; esac
+            TAG="$GITHUB_REF_NAME"
+            case "$TAG" in *beta*) CHANNEL="beta";; *) CHANNEL="prod";; esac
           else
-            echo "TAG=v${INPUT_VERSION:-0.0.0}" >> "$GITHUB_ENV"
-            case "$INPUT_VERSION" in *beta*) echo "CHANNEL=beta" >> "$GITHUB_ENV";; *) echo "CHANNEL=prod" >> "$GITHUB_ENV";; esac
+            TAG="v${INPUT_VERSION:-0.0.0}"
+            case "$INPUT_VERSION" in *beta*) CHANNEL="beta";; *) CHANNEL="prod";; esac
           fi
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
+          echo "CHANNEL=$CHANNEL" >> "$GITHUB_ENV"
 
       # Group commit subjects between the previous release tag and $TAG by
       # conventional-commit type. Never fatal: an empty release-notes.md means
@@ -558,7 +562,7 @@ jobs:
             console.log(fs.readFileSync("release-notes.md", "utf8"));
           ' || echo "changelog generation failed; publishing without notes"
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: artifacts
 

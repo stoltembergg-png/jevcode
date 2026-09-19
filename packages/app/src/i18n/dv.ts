@@ -847,6 +847,7 @@ export const dict = {
   "semif.action.start": "Prepare model",
   "semif.action.retry": "Retry",
   "semif.progress.percent": "{{percent}}",
+  "semif.model.label": "Local model",
   "session.share.popover.title": "ވެބްގައި ޝާއިއުކުރުން",
   "session.share.popover.description.shared":
     "މި ސެޝަން ވެބްގައި އާންމުކޮށް ކުރިއަށް ގެންދެވޭނެއެވެ. އެއީ ލިންކް އާއި އެކު ކޮންމެ މީހަކަށް ވެސް އެކްސެސް ކުރެވޭނެ އެއްޗެކެވެ.",

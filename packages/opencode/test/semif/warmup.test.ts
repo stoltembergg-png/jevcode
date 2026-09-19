@@ -10,6 +10,7 @@ const status = (overrides: Partial<Status>): Status => ({
   host: "127.0.0.1",
   port: 8817,
   adopted: false,
+  choices: [],
   ...overrides,
 })
 

@@ -129,8 +129,9 @@ const command = (config: SidecarConfig, port: number) =>
       "-c",
       String(config.contextSize),
       "--no-webui",
+      // Two slots lets a status poll overlap a decision without doubling the KV arena.
       "--parallel",
-      "1",
+      "2",
     ],
     {
       cwd: path.dirname(config.serverPath),

@@ -840,6 +840,7 @@ export const dict = {
   "semif.action.start": "Prepare model",
   "semif.action.retry": "Retry",
   "semif.progress.percent": "{{percent}}",
+  "semif.model.label": "Local model",
   "session.share.popover.title": "Δημοσίευση στον Ιστό",
   "session.share.popover.description.shared":
     "Αυτή η συνεδρία είναι δημόσια στον Ιστό. Είναι προσβάσιμο σε οποιονδήποτε έχει τον σύνδεσμο.",

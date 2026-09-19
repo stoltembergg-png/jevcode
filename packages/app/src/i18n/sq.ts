@@ -835,6 +835,7 @@ export const dict = {
   "semif.action.start": "Prepare model",
   "semif.action.retry": "Retry",
   "semif.progress.percent": "{{percent}}",
+  "semif.model.label": "Local model",
   "session.share.popover.title": "Publikimi në ueb",
   "session.share.popover.description.shared":
     "Ky sesion është publik në ueb. Është i aksesueshëm për këdo që ka lidhjen.",

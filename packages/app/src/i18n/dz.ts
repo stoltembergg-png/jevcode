@@ -845,6 +845,7 @@ export const dict: Record<string, string> = {
   "semif.action.start": "Prepare model",
   "semif.action.retry": "Retry",
   "semif.progress.percent": "{{percent}}",
+  "semif.model.label": "Local model",
   "session.share.popover.title": "ཝེབ་ནང་དཔར་བསྐྲུན་འབད།",
   "session.share.popover.description.shared":
     "ལཱ་ཡུན་འདི་ ཝེབ་ནང་ མི་མང་ཨིན། འབྲེལ་ལམ་ཡོད་མི་ག་ར་གིས་ འཛུལ་སྤྱོད་འབད་ཚུགས།",

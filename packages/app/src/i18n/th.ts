@@ -851,6 +851,7 @@ export const dict = {
   "semif.action.start": "Prepare model",
   "semif.action.retry": "Retry",
   "semif.progress.percent": "{{percent}}",
+  "semif.model.label": "Local model",
 
   "session.share.popover.title": "เผยแพร่บนเว็บ",
   "session.share.popover.description.shared": "เซสชันนี้เป็นสาธารณะบนเว็บ สามารถเข้าถึงได้โดยผู้ที่มีลิงก์",

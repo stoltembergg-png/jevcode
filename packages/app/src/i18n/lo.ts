@@ -827,6 +827,7 @@ export const dict = {
   "semif.action.start": "Prepare model",
   "semif.action.retry": "Retry",
   "semif.progress.percent": "{{percent}}",
+  "semif.model.label": "Local model",
   "session.share.popover.title": "ເຜີຍແຜ່ໃນເວັບ",
   "session.share.popover.description.shared": "ເຊດຊັນນີ້ແມ່ນສາທາລະນະໃນເວັບ. ມັນສາມາດເຂົ້າເຖິງທຸກຄົນທີ່ມີການເຊື່ອມຕໍ່.",
   "session.share.popover.description.unshared":

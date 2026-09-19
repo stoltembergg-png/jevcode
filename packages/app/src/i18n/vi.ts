@@ -842,6 +842,7 @@ export const dict = {
   "semif.action.start": "Prepare model",
   "semif.action.retry": "Retry",
   "semif.progress.percent": "{{percent}}",
+  "semif.model.label": "Local model",
   "session.share.popover.title": "Xuất bản trên web",
   "session.share.popover.description.shared":
     "Phiên này được công khai trên web. Nó có thể truy cập được bởi bất kỳ ai có liên kết.",

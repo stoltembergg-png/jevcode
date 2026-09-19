@@ -34,10 +34,10 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## LFM2 models (`LiquidAI/LFM2-350M-GGUF`)
+## LFM2 models (`LiquidAI/LFM2-1.2B-GGUF`, `LiquidAI/LFM2-350M-GGUF`)
 
-The default SemIf model weights are distributed under the LFM Open License v1.0.
-Source: <https://huggingface.co/LiquidAI/LFM2-350M-GGUF/raw/main/LICENSE>.
+The default SemIf model weights (`LFM2-1.2B-Q4_K_M`) and the smaller `LFM2-350M-Q4_K_M` catalog entry are distributed under the LFM Open License v1.0.
+Source: <https://huggingface.co/LiquidAI/LFM2-1.2B-GGUF/raw/main/LICENSE>.
 
 ```
 LFM Open License v1.0
@@ -77,3 +77,13 @@ You may add Your own copyright statement to Your modifications and may provide a
 11. Termination. This License will terminate automatically and immediately if You fail to comply with any of its terms and conditions. Upon termination, You must cease all use of the Work and any Derivative Works and delete all copies in Your possession.
 END OF TERMS AND CONDITIONS
 ```
+
+## Qwen2.5 (`Qwen/Qwen2.5-1.5B-Instruct-GGUF`)
+
+Optional SemIf catalog weights. Licensed under Apache License 2.0.
+Source: <https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/raw/main/LICENSE>.
+
+## DeepSeek-R1-Distill-Qwen-1.5B (`deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B`)
+
+Optional SemIf catalog weights, served from the bartowski Q4_K_M GGUF conversion. The distill is derived from Qwen2.5 (Apache License 2.0).
+Sources: <https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B> and <https://huggingface.co/bartowski/DeepSeek-R1-Distill-Qwen-1.5B-GGUF>.

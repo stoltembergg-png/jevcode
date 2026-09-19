@@ -42,7 +42,7 @@ const DEFAULTS = {
   port: 8817,
   contextSize: 2048,
   nProbs: 256,
-  loadTimeoutMs: 60000,
+  loadTimeoutMs: 120000,
   cacheSize: 128,
 }
 

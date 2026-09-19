@@ -45,6 +45,12 @@ export interface Models {
   readonly quant: string
 }
 
+export interface Choice {
+  readonly id: string
+  readonly label: string
+  readonly quant: string
+}
+
 export interface Progress {
   readonly received: number
   readonly total: number | undefined
@@ -55,6 +61,7 @@ export interface Status {
   readonly mode: SemifMode
   readonly download: DownloadPolicy
   readonly model?: Models
+  readonly choices: readonly Choice[]
   readonly modelPath?: string
   readonly serverPath?: string
   readonly host: string
@@ -157,7 +164,21 @@ const layer = Layer.effect(
       }
     })
 
+    const dropHandleIfStale = Effect.gen(function* () {
+      const loaded = yield* load
+      const current = yield* Ref.get(state)
+      if (!current.handle) return
+      const stale =
+        loaded.resolved.mode === "off" ||
+        (loaded.modelPath !== undefined && current.handle.modelPath !== loaded.modelPath)
+      if (!stale) return
+      yield* SemifSidecar.dispose(current.handle)
+      SemifScoring.clearCaches()
+      yield* Ref.set(state, { status: "offline" as SemifStatus })
+    })
+
     const snapshot = Effect.gen(function* () {
+      yield* dropHandleIfStale
       const loaded = yield* load
       const current = yield* Ref.get(state)
       const base = {
@@ -176,6 +197,11 @@ const layer = Layer.effect(
               quant: loaded.entry.quant,
             }
           : undefined,
+        choices: SemifManifest.CHOICES.map((entry) => ({
+          id: entry.id,
+          label: entry.label,
+          quant: entry.quant,
+        })),
         modelPath: loaded.modelPath,
         serverPath: loaded.serverPath,
         progress: live.progress,
@@ -199,7 +225,8 @@ const layer = Layer.effect(
 
     const ensureModel = Effect.gen(function* () {
       const loaded = yield* load
-      if (!loaded.entry || !loaded.modelPath) {
+      const entry = loaded.entry
+      if (!entry || !loaded.modelPath) {
         return yield* new SemifServiceError({ reason: "semif: no supported model is configured" })
       }
       yield* Ref.update(state, (value) => ({ ...value, status: "downloading" as SemifStatus, error: undefined }))
@@ -207,10 +234,10 @@ const layer = Layer.effect(
         SemifAcquire.ensure({
           policy: loaded.download,
           dest: loaded.modelPath,
-          part: SemifPaths.partPath(loaded.entry.sha256),
-          sha256: loaded.entry.sha256,
-          expectedBytes: loaded.entry.bytes,
-          resolveUrl: () => Effect.succeed(SemifManifest.resolveUrl()),
+          part: SemifPaths.partPath(entry.sha256),
+          sha256: entry.sha256,
+          expectedBytes: entry.bytes,
+          resolveUrl: () => Effect.succeed(SemifManifest.resolveUrl(entry)),
           onProgress: (progress) => {
             live.progress = progress
           },
@@ -222,6 +249,7 @@ const layer = Layer.effect(
     })
 
     const acquireHandle = Effect.gen(function* () {
+      yield* dropHandleIfStale
       const loaded = yield* load
       const current = yield* Ref.get(state)
       if (current.handle) return current.handle
@@ -257,6 +285,10 @@ const layer = Layer.effect(
           modelPath: loaded.modelPath,
         }),
       ).pipe(Effect.mapError((cause) => new SemifServiceError({ reason: errorMessage(cause) })))
+      yield* Effect.tryPromise({
+        try: () => SemifScoring.prepare({ url: handle.url }, loaded.entry?.family ?? "lfm2"),
+        catch: (cause) => new SemifServiceError({ reason: errorMessage(cause) }),
+      })
       yield* Ref.set(state, { status: "ready" as SemifStatus, handle })
       return handle
     })
@@ -301,8 +333,13 @@ const layer = Layer.effect(
         Effect.gen(function* () {
           const loaded = yield* load
           const handle = yield* ensureHandle
+          const entry = loaded.entry
+          if (!entry) {
+            return yield* new SemifServiceError({ reason: "semif: no supported model is configured" })
+          }
           return yield* Effect.tryPromise({
-            try: () => SemifScoring.decide({ url: handle.url }, loaded.resolved, request),
+            try: () =>
+              SemifScoring.decide({ url: handle.url }, loaded.resolved, request, SemifManifest.profile(entry)),
             catch: (cause) => new SemifServiceError({ reason: errorMessage(cause) }),
           })
         }).pipe(
@@ -317,6 +354,7 @@ const layer = Layer.effect(
         Effect.gen(function* () {
           const current = yield* Ref.get(state)
           if (current.handle) yield* SemifSidecar.dispose(current.handle)
+          SemifScoring.clearCaches()
           yield* Ref.set(state, { status: "offline" as SemifStatus })
         }),
     }

@@ -43,7 +43,7 @@ export const Info = Schema.Struct({
     description: "Port the local model server listens on (default: 8817)",
   }),
   model: Schema.optional(Schema.String).annotate({
-    description: "Model id or name with quantization to download and run, e.g. LiquidAI/LFM2-350M-GGUF",
+    description: "Model id or name with quantization to download and run, e.g. LiquidAI/LFM2-1.2B-GGUF",
   }),
   model_path: Schema.optional(Schema.String).annotate({
     description:
