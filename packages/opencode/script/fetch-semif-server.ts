@@ -200,10 +200,11 @@ async function extractZip(archive: string): Promise<ExtractedFile[]> {
   const entries = await reader.getEntries()
   const files: ExtractedFile[] = []
   for (const entry of entries) {
-    if (!("getData" in entry)) continue
+    const getData = entry.getData
+    if (typeof getData !== "function") continue
     const name = path.basename(entry.filename)
     if (!name.endsWith(".dll") && name !== "llama-server.exe") continue
-    const data = await entry.getData(new Uint8ArrayWriter())
+    const data = await getData(new Uint8ArrayWriter())
     files.push({ name, read: async () => data })
   }
   await reader.close()
