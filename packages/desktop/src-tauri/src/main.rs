@@ -1600,8 +1600,7 @@ fn main() {
   try {
     const appExists = await invoke("check_app_exists", { appName: "explorer.exe" });
     const appPath = await invoke("resolve_app_path", { appName: "cmd" });
-    const revealed = await invoke("reveal_path", { path: "D:\\Projetos\\JevCode\\package.json" });
-    await invoke("log_stub", { message: "shell self-test " + JSON.stringify({ appExists, appPath, revealed }) });
+    await invoke("log_stub", { message: "shell self-test " + JSON.stringify({ appExists, appPath }) });
   } catch (error) {
     await invoke("log_stub", { message: "shell self-test failed " + String(error) });
   }
