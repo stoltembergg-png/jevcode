@@ -4,6 +4,7 @@ import type {
   Path,
   Project,
   ProviderAuthResponse,
+  SemifStatus,
   SessionStatus,
 } from "@opencode-ai/sdk/v2/client"
 import { showToast } from "@/utils/toast"
@@ -150,6 +151,19 @@ export const loadLspQuery = (scope: ServerScope, directory: string, sdk: Opencod
     queryFn: () => sdk.lsp.status().then((r) => r.data ?? []),
   })
 
+// The local SemIf model is one per machine, so the status is server-global and
+// keyed by scope only. Poll while the service is mid-flight; idle states rely on
+// the mount refetch.
+const isSemifActive = (status: SemifStatus["status"] | undefined) =>
+  status === "downloading" || status === "verifying" || status === "starting"
+
+export const loadSemifStatusQuery = (scope: ServerScope, sdk: OpencodeClient) =>
+  queryOptions({
+    queryKey: [scope, "semif"] as const,
+    queryFn: () => sdk.semif.status().then((r) => r.data),
+    refetchInterval: (query) => (isSemifActive(query.state.data?.status) ? 1500 : false),
+  })
+
 export const loadActiveSessionsQuery = (
   scope: ServerScope,
   api: SessionActiveApi,
@@ -197,6 +211,7 @@ function makeQueryOptionsApi(
     mcpResources: (directory: PathKey) =>
       loadMcpResourcesQuery(scope, directory, serverAPI.mcp, sdkFor(directory), protocol),
     lsp: (directory: PathKey) => loadLspQuery(scope, directory, sdkFor(directory)),
+    semif: () => loadSemifStatusQuery(scope, serverSDK()),
     sessions: (directory: PathKey) => ({ queryKey: [scope, directory, "loadSessions"] as const }),
   }
 }

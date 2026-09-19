@@ -901,6 +901,18 @@ export const dict = {
   "semif.description.lazy": "Loads the model on the first decision",
   "semif.description.off": "Plugin disabled",
   "semif.not_configured": "semif plugin not configured in this project",
+  "semif.state.ready": "Ready for decisions",
+  "semif.state.not_downloaded": "Model not downloaded yet",
+  "semif.state.downloading": "Downloading model",
+  "semif.state.verifying": "Verifying integrity",
+  "semif.state.starting": "Loading local model",
+  "semif.state.failed": "Failed to prepare the model",
+  "semif.state.offline": "A connection is required",
+  "semif.state.unsupported": "Not available on this platform",
+  "semif.state.disabled": "SemIf is disabled",
+  "semif.action.start": "Prepare model",
+  "semif.action.retry": "Retry",
+  "semif.progress.percent": "{{percent}}",
 
   "session.share.popover.title": "Опублікувати в інтернеті",
   "session.share.popover.description.shared":
