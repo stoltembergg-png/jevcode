@@ -151,7 +151,7 @@ export async function bootstrapGlobal(input: {
   queryClient: QueryClient
 }) {
   const slow = [
-    () => input.queryClient.fetchQuery(loadGlobalConfigQuery(input.scope, input.serverSDK, input.protocol)),
+    () => input.queryClient.fetchQuery(loadGlobalConfigQuery(input.scope, input.serverSDK)),
     () =>
       input.queryClient.fetchQuery(
         loadProvidersQuery(input.scope, null, input.serverAPI, input.serverSDK, input.protocol),
