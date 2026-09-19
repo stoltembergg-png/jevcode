@@ -835,6 +835,7 @@ export const dict = {
   "semif.action.start": "Prepare model",
   "semif.action.retry": "Retry",
   "semif.progress.percent": "{{percent}}",
+  "semif.model.label": "Local model",
   "session.share.popover.title": "Дар веб нашр кунед",
   "session.share.popover.description.shared": "Ин ҷаласа дар веб оммавӣ аст. Он барои ҳама бо истинод дастрас аст.",
   "session.share.popover.description.unshared":

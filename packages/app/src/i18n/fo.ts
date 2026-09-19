@@ -832,6 +832,7 @@ export const dict = {
   "semif.action.start": "Prepare model",
   "semif.action.retry": "Retry",
   "semif.progress.percent": "{{percent}}",
+  "semif.model.label": "Local model",
   "session.share.popover.title": "Útgeva á netinum",
   "session.share.popover.description.shared":
     "Henda setan er almenn á netinum. Tað er atkomiligt fyri øll, sum hava leinkjuna.",

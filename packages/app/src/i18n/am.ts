@@ -819,6 +819,7 @@ export const dict = {
   "semif.action.start": "Prepare model",
   "semif.action.retry": "Retry",
   "semif.progress.percent": "{{percent}}",
+  "semif.model.label": "Local model",
   "session.share.popover.title": "በድር ላይ አትም",
   "session.share.popover.description.shared": "ይህ ክፍለ ጊዜ በድር ላይ ይፋዊ ነው። አገናኙ ላለው ለማንኛውም ሰው ተደራሽ ነው።",
   "session.share.popover.description.unshared": "ክፍለጊዜውን በይፋ በድሩ ላይ አጋራ። አገናኙ ላለው ለማንኛውም ሰው ተደራሽ ይሆናል።",

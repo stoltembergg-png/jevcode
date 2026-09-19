@@ -832,6 +832,7 @@ export const dict = {
   "semif.action.start": "Prepare model",
   "semif.action.retry": "Retry",
   "semif.progress.percent": "{{percent}}",
+  "semif.model.label": "Local model",
   "session.share.popover.title": "Webde çap ediň",
   "session.share.popover.description.shared":
     "Bu sessiýa internetde açykdyr. Salgysy bolan islendik adam üçin elýeterlidir.",

@@ -839,6 +839,7 @@ export const dict = {
   "semif.action.start": "Prepare model",
   "semif.action.retry": "Retry",
   "semif.progress.percent": "{{percent}}",
+  "semif.model.label": "Local model",
   "session.share.popover.title": "Közzététel a weben",
   "session.share.popover.description.shared": "Ez a munkamenet nyilvános a weben. A link birtokában bárki hozzáférhet.",
   "session.share.popover.description.unshared":

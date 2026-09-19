@@ -829,6 +829,7 @@ export const dict = {
   "semif.action.start": "Prepare model",
   "semif.action.retry": "Retry",
   "semif.progress.percent": "{{percent}}",
+  "semif.model.label": "Local model",
   "session.share.popover.title": "បោះផ្សាយនៅលើគេហទំព័រ",
   "session.share.popover.description.shared":
     "សម័យនេះគឺសាធារណៈនៅលើគេហទំព័រ។ វា​អាច​ចូល​ប្រើ​បាន​សម្រាប់​អ្នក​ណា​ដែល​មាន​តំណ។",

@@ -834,6 +834,7 @@ export const dict: Record<string, string> = {
   "semif.action.start": "Prepare model",
   "semif.action.retry": "Retry",
   "semif.progress.percent": "{{percent}}",
+  "semif.model.label": "Local model",
   "session.share.popover.title": "वेबमा प्रकाशित गर्नुहोस्",
   "session.share.popover.description.shared": "यो सत्र वेबमा सार्वजनिक छ। यो लिङ्क भएको जो कोहीको लागि पहुँचयोग्य छ।",
   "session.share.popover.description.unshared":

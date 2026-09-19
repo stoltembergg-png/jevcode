@@ -832,6 +832,7 @@ export const dict = {
   "semif.action.start": "Prepare model",
   "semif.action.retry": "Retry",
   "semif.progress.percent": "{{percent}}",
+  "semif.model.label": "Local model",
   "session.share.popover.title": "გამოქვეყნება ვებზე",
   "session.share.popover.description.shared": "ეს სესია საჯაროა ინტერნეტში. ის ხელმისაწვდომია ყველასთვის ბმულით.",
   "session.share.popover.description.unshared":

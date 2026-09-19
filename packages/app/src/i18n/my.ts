@@ -840,6 +840,7 @@ export const dict = {
   "semif.action.start": "Prepare model",
   "semif.action.retry": "Retry",
   "semif.progress.percent": "{{percent}}",
+  "semif.model.label": "Local model",
   "session.share.popover.title": "ဝဘ်ပေါ်တွင် လွှင့်တင်ပါ။",
   "session.share.popover.description.shared":
     "ဤစက်ရှင်သည် ဝဘ်ပေါ်တွင် အများသူငှာဖြစ်သည်။ ၎င်းကို လင့်ခ်ရှိသူတိုင်း အသုံးပြုနိုင်သည်။",
