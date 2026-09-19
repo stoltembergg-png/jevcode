@@ -1,6 +1,16 @@
 import { describe, expect, test } from "bun:test"
-import { availableParallelism } from "node:os"
-import { assertSemifPaths, checkSemifPaths, fromConfig, parseSemifOptions } from "../../src/semif/config"
+import { availableParallelism, tmpdir } from "node:os"
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises"
+import { join } from "node:path"
+import {
+  assertSemifPaths,
+  checkSemifPaths,
+  defaultServerName,
+  fromConfig,
+  parseSemifOptions,
+  resolveInstalledPaths,
+  semifInstallDir,
+} from "../../src/semif/config"
 
 const ENV_KEYS = [
   "SEMIF_MODE",
@@ -205,5 +215,74 @@ describe("semif fromConfig", () => {
       expect(resolved.port).toBe(8817)
       expect(resolved.modelPath).toBe("/env/model.gguf")
     })
+  })
+})
+
+describe("semif resolveInstalledPaths", () => {
+  async function withInstall(
+    files: { models?: string[]; server?: boolean },
+    fn: (baseDir: string) => Promise<void>,
+  ): Promise<void> {
+    const baseDir = await mkdtemp(join(tmpdir(), "semif-install-"))
+    try {
+      const dir = semifInstallDir(baseDir)
+      await mkdir(join(dir, "models"), { recursive: true })
+      await mkdir(join(dir, "bin"), { recursive: true })
+      for (const name of files.models ?? []) await writeFile(join(dir, "models", name), "gguf")
+      if (files.server) await writeFile(join(dir, "bin", defaultServerName()), "bin")
+      await fn(baseDir)
+    } finally {
+      await rm(baseDir, { recursive: true, force: true })
+    }
+  }
+
+  test("fills unset paths from the global install directory", async () => {
+    await withEnv({}, async () => {
+      await withInstall({ models: ["LFM2-350M-Q4_K_M.gguf"], server: true }, async (baseDir) => {
+        const resolved = await resolveInstalledPaths(parseSemifOptions({ mode: "auto" }), baseDir)
+        expect(resolved.modelPath).toBe(join(semifInstallDir(baseDir), "models", "LFM2-350M-Q4_K_M.gguf"))
+        expect(resolved.serverPath).toBe(join(semifInstallDir(baseDir), "bin", defaultServerName()))
+      })
+    })
+  })
+
+  test("explicit config paths are never overridden", async () => {
+    await withEnv({}, async () => {
+      await withInstall({ models: ["LFM2-350M-Q4_K_M.gguf"], server: true }, async (baseDir) => {
+        const resolved = await resolveInstalledPaths(
+          parseSemifOptions({ mode: "auto", modelPath: "/explicit/model.gguf", serverPath: "/explicit/llama-server" }),
+          baseDir,
+        )
+        expect(resolved.modelPath).toBe("/explicit/model.gguf")
+        expect(resolved.serverPath).toBe("/explicit/llama-server")
+      })
+    })
+  })
+
+  test("leaves paths unset when nothing is installed", async () => {
+    await withEnv({}, async () => {
+      await withInstall({}, async (baseDir) => {
+        const resolved = await resolveInstalledPaths(parseSemifOptions({ mode: "auto" }), baseDir)
+        expect(resolved.modelPath).toBeUndefined()
+        expect(resolved.serverPath).toBeUndefined()
+      })
+    })
+  })
+
+  test("uses the model hint to disambiguate multiple gguf files", async () => {
+    await withEnv({}, async () => {
+      await withInstall({ models: ["other-model.gguf", "LFM2-350M-Q4_K_M.gguf"] }, async (baseDir) => {
+        const hinted = await resolveInstalledPaths(parseSemifOptions({ mode: "auto", model: "LFM2-350M" }), baseDir)
+        expect(hinted.modelPath).toBe(join(semifInstallDir(baseDir), "models", "LFM2-350M-Q4_K_M.gguf"))
+        const ambiguous = await resolveInstalledPaths(parseSemifOptions({ mode: "auto" }), baseDir)
+        expect(ambiguous.modelPath).toBeUndefined()
+      })
+    })
+  })
+
+  test("defaultServerName is platform-aware", () => {
+    expect(defaultServerName("win32")).toBe("llama-server.exe")
+    expect(defaultServerName("linux")).toBe("llama-server")
+    expect(defaultServerName("darwin")).toBe("llama-server")
   })
 })

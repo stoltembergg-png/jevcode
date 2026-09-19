@@ -1,5 +1,6 @@
-import { stat } from "node:fs/promises"
+import { readdir, stat } from "node:fs/promises"
 import { availableParallelism } from "node:os"
+import { join } from "node:path"
 import type { ConfigSemifV1 } from "@opencode-ai/core/v1/config/semif"
 
 export type SemifMode = "auto" | "lazy" | "off"
@@ -8,6 +9,7 @@ export type SemifOptions = {
   mode?: string
   modelPath?: string
   serverPath?: string
+  model?: string
   port?: number
   threads?: number
   contextSize?: number
@@ -26,6 +28,7 @@ export type SemifResolved = {
   nProbs: number
   loadTimeoutMs: number
   cacheSize: number
+  model?: string
   modelPath?: string
   serverPath?: string
 }
@@ -92,6 +95,7 @@ export function parseSemifOptions(raw?: unknown): SemifResolved {
   // There are deliberately no author-machine fallbacks here; existence is checked by assertSemifPaths.
   const modelPath = readString(options.modelPath) ?? readString(env.SEMIF_MODEL_PATH)
   const serverPath = readString(options.serverPath) ?? readString(env.SEMIF_SERVER_PATH)
+  const model = readString(options.model) ?? readString(env.SEMIF_MODEL)
 
   const host = readString(options.host) ?? readString(env.SEMIF_HOST) ?? DEFAULTS.host
   const port = requireInt(readInt(options.port) ?? readInt(env.SEMIF_PORT), DEFAULTS.port, "port", 1, 65535)
@@ -134,6 +138,7 @@ export function parseSemifOptions(raw?: unknown): SemifResolved {
     nProbs,
     loadTimeoutMs,
     cacheSize,
+    model,
     modelPath,
     serverPath,
   }
@@ -152,9 +157,53 @@ export function fromConfig(semif?: ConfigSemifV1.Info): SemifResolved {
     contextSize: semif.contextSize,
     nProbs: semif.nProbs,
     cacheSize: semif.cacheSize,
+    model: semif.model,
     modelPath: semif.model_path,
     serverPath: semif.server_path,
   })
+}
+
+// Standard on-disk layout for a globally-installed SemIf runtime, e.g. under
+// the opencode data directory: `<base>/semif/{models,bin}`.
+export function semifInstallDir(baseDir: string): string {
+  return join(baseDir, "semif")
+}
+
+export function defaultServerName(platform: NodeJS.Platform = process.platform): string {
+  return platform === "win32" ? "llama-server.exe" : "llama-server"
+}
+
+const normalizeHint = (value: string): string => value.toLowerCase().replace(/[^a-z0-9]+/g, "")
+
+async function findModelFile(modelsDir: string, hint?: string): Promise<string | undefined> {
+  const entries = await readdir(modelsDir).catch(() => [] as string[])
+  const ggufs = entries.filter((name) => name.toLowerCase().endsWith(".gguf"))
+  if (ggufs.length === 0) return undefined
+  if (hint) {
+    const needle = normalizeHint(hint)
+    const match = ggufs.find((name) => normalizeHint(name).includes(needle))
+    if (match) return join(modelsDir, match)
+  }
+  // Only auto-pick when there is a single unambiguous candidate.
+  return ggufs.length === 1 ? join(modelsDir, ggufs[0]!) : undefined
+}
+
+async function installedServerPath(binDir: string): Promise<string | undefined> {
+  const candidate = join(binDir, defaultServerName())
+  const exists = await stat(candidate).then(
+    () => true,
+    () => false,
+  )
+  return exists ? candidate : undefined
+}
+
+// Fill model/server paths from the standard global install location when the
+// config leaves them unset. Explicit config or env paths always win.
+export async function resolveInstalledPaths(cfg: SemifResolved, baseDir: string): Promise<SemifResolved> {
+  const dir = semifInstallDir(baseDir)
+  const modelPath = cfg.modelPath ?? (await findModelFile(join(dir, "models"), cfg.model))
+  const serverPath = cfg.serverPath ?? (await installedServerPath(join(dir, "bin")))
+  return { ...cfg, modelPath, serverPath }
 }
 
 async function pathExists(path: string | undefined): Promise<boolean> {

@@ -1,5 +1,6 @@
 import { Context, Effect, Layer } from "effect"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
+import { Global } from "@opencode-ai/core/global"
 import { Config } from "@/config/config"
 import { InstanceState } from "@/effect/instance-state"
 import { SemifConfig } from "./config"
@@ -10,6 +11,7 @@ const toError = (error: unknown): Error => (error instanceof Error ? error : new
 
 export type SemifStatus = SemifEngine.SidecarStatus & {
   mode: SemifConfig.SemifMode
+  serverPath: string | undefined
   modelExists: boolean
   serverExists: boolean
 }
@@ -39,7 +41,11 @@ const layer = Layer.effect(
     const state = yield* InstanceState.make<State>(
       Effect.fn("Semif.state")(function* () {
         const cfg = yield* config.get()
-        const resolved = SemifConfig.fromConfig(cfg.semif)
+        // Fill unset model/server paths from the standard global install dir so a
+        // config that only sets `mode` works once the runtime is present on disk.
+        const resolved = yield* Effect.promise(() =>
+          SemifConfig.resolveInstalledPaths(SemifConfig.fromConfig(cfg.semif), Global.Path.data),
+        )
         const sidecar = SemifEngine.createSidecar(resolved)
         yield* Effect.addFinalizer(() => Effect.promise(() => sidecar.dispose()))
         // "auto" warms the sidecar in the background without blocking materialization;
@@ -61,6 +67,7 @@ const layer = Layer.effect(
       return {
         ...s.sidecar.status(),
         mode: s.resolved.mode,
+        serverPath: s.resolved.serverPath,
         modelExists: paths.modelExists,
         serverExists: paths.serverExists,
       }
